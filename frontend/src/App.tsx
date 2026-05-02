@@ -11,11 +11,15 @@ function Shell({ children }: { children: React.ReactNode }) {
   const { state, logout } = useAuth();
   const loc = useLocation();
   const onAuthPage = loc.pathname.startsWith("/login");
+  const isAuthed = Boolean(state.me) && !onAuthPage;
+  const role = state.me?.role;
+  const onClaimant = loc.pathname.startsWith("/claimant");
+  const onApprover = loc.pathname.startsWith("/approver");
 
   return (
     <div className="app-shell">
       <header className="app-nav">
-        <div className="h-0.5 w-full bg-gradient-to-r from-primary-500 via-accent-500 to-primary-400 opacity-80" />
+        <div className="h-0.5 w-full bg-gradient-to-r from-primary-500 via-primary-300 to-accent-500 opacity-80" />
         <div className="app-nav-inner">
           <Link to="/" className="app-brand">
             <span className="app-brand-mark">MCV</span>
@@ -46,9 +50,56 @@ function Shell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="app-container py-8 sm:py-10">
-        {children}
-      </main>
+      {isAuthed ? (
+        <div className="app-layout">
+          <aside className="app-sidebar">
+            <div className="app-sidebar-card">
+              <p className="sidebar-title">Menu</p>
+              <nav className="mt-3 space-y-1">
+                {(role === "claimant" || role === "admin") && (
+                  <Link
+                    to="/claimant"
+                    className={`sidebar-link ${onClaimant ? "sidebar-link-active" : ""}`}
+                  >
+                    <span className="sidebar-link-icon" aria-hidden>
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h18v6H3V3zm0 12h18v9H3v-9zm4-5v3m4-3v3m4-3v3" />
+                      </svg>
+                    </span>
+                    Claims dashboard
+                  </Link>
+                )}
+                {(role === "approver" || role === "admin") && (
+                  <Link
+                    to="/approver"
+                    className={`sidebar-link ${onApprover ? "sidebar-link-active" : ""}`}
+                  >
+                    <span className="sidebar-link-icon" aria-hidden>
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m2 10H7a2 2 0 01-2-2V6a2 2 0 012-2h6l5 5v11a2 2 0 01-2 2z" />
+                      </svg>
+                    </span>
+                    Review queue
+                  </Link>
+                )}
+              </nav>
+
+              <div className="mt-4 rounded-2xl border border-neutral-200/70 bg-white/70 px-3 py-3 text-xs text-neutral-600">
+                <p className="font-semibold text-neutral-800">Tip</p>
+                <p className="mt-1">Use “Live” on a claim to see status and AI results update.</p>
+              </div>
+            </div>
+          </aside>
+
+          <main className="min-w-0">
+            {children}
+          </main>
+        </div>
+      ) : (
+        <main className="app-container py-8 sm:py-10">
+          {children}
+        </main>
+      )}
     </div>
   );
 }

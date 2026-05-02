@@ -17,11 +17,20 @@ export default function LoginPage() {
     setError(null);
     setBusy(true);
     try {
-      await login({ email, password });
+      await login({ email: email.trim(), password });
       await refresh();
       nav("/", { replace: true });
     } catch (err: any) {
-      setError(err?.response?.data?.detail ?? "Invalid email or password.");
+      const detail = err?.response?.data?.detail;
+      if (detail) {
+        setError(detail);
+      } else if (err?.message && String(err.message).toLowerCase().includes("network")) {
+        setError("Cannot reach backend API. Please wait for the backend to start (port 8000) and try again.");
+      } else if (!err?.response) {
+        setError("Login failed: backend not reachable. Please start the backend and try again.");
+      } else {
+        setError("Invalid email or password.");
+      }
     } finally {
       setBusy(false);
     }

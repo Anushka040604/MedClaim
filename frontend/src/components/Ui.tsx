@@ -4,6 +4,10 @@ function cx(...parts: Array<string | undefined | false>) {
   return parts.filter(Boolean).join(" ");
 }
 
+const controlBase =
+  "w-full rounded-2xl border border-neutral-200/80 bg-white/90 px-3 text-sm text-neutral-900 outline-none transition shadow-input " +
+  "placeholder:text-neutral-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 disabled:bg-neutral-50 disabled:text-neutral-500";
+
 export function Card({
   children,
   className,
@@ -16,7 +20,7 @@ export function Card({
   return (
     <div
       className={cx(
-        "rounded-2xl border border-primary-100/60 bg-gradient-card p-5 shadow-card sm:p-6 transition-all duration-200",
+        "rounded-3xl border border-neutral-200/70 bg-gradient-card p-5 shadow-card sm:p-6 transition-all duration-200",
         hover &&
           "hover:-translate-y-0.5 hover:shadow-card-hover hover:border-primary-200/60 active:translate-y-0",
         className
@@ -35,16 +39,16 @@ export function Button(
 ) {
   const { variant = "primary", size = "md", className = "", ...rest } = props;
   const base =
-    "inline-flex select-none items-center justify-center gap-2 rounded-xl font-semibold transition active:translate-y-[1px] focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50";
+    "inline-flex select-none items-center justify-center gap-2 rounded-2xl font-semibold transition active:translate-y-[1px] focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50";
   const sizes = size === "sm" ? "h-9 px-3 text-sm" : "h-10 px-4 text-sm";
   const styles =
     variant === "primary"
-      ? "bg-gradient-to-br from-primary-600 to-primary-700 text-white shadow-md hover:from-primary-700 hover:to-primary-800 hover:shadow-lg focus:ring-primary-400/50"
+      ? "bg-gradient-to-br from-primary-600 via-primary-500 to-primary-400 text-white shadow-md hover:shadow-lg hover:saturate-110 focus:ring-primary-400/50"
       : variant === "secondary"
-        ? "border border-primary-200 bg-white/70 text-primary-800 shadow-sm hover:bg-primary-50 hover:border-primary-300 focus:ring-primary-400/30"
+        ? "border border-neutral-200 bg-white/80 text-neutral-800 shadow-sm hover:bg-primary-50/60 hover:border-primary-200 focus:ring-primary-400/30"
         : variant === "danger"
           ? "border border-red-200 bg-white/70 text-red-700 shadow-sm hover:bg-red-50 focus:ring-red-400/40"
-          : "text-neutral-700 hover:bg-primary-50 hover:text-primary-900 focus:ring-primary-400/30";
+          : "text-neutral-700 hover:bg-primary-50/70 hover:text-primary-900 focus:ring-primary-400/30";
   return <button className={cx(base, sizes, styles, className)} {...rest} />;
 }
 
@@ -53,12 +57,60 @@ export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       className={cx(
-        "h-10 w-full rounded-xl border border-neutral-200 bg-white/90 px-3 text-sm text-neutral-900 outline-none transition shadow-input",
-        "placeholder:text-neutral-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 disabled:bg-neutral-50 disabled:text-neutral-500",
+        "h-10",
+        controlBase,
         className
       )}
       {...rest}
     />
+  );
+}
+
+export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  const { className = "", children, ...rest } = props;
+  return (
+    <div className="relative">
+      <select
+        className={cx(
+          "h-10 appearance-none pr-10",
+          controlBase,
+          "focus:ring-primary-500/20",
+          className
+        )}
+        {...rest}
+      >
+        {children}
+      </select>
+      <svg
+        aria-hidden
+        className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+      </svg>
+    </div>
+  );
+}
+
+export function FileInput(
+  props: React.InputHTMLAttributes<HTMLInputElement> & { hint?: string }
+) {
+  const { className = "", hint, ...rest } = props;
+  return (
+    <div className={cx("space-y-1.5", className)}>
+      <input
+        type="file"
+        className={cx(
+          "block w-full text-sm text-neutral-600",
+          "file:mr-3 file:rounded-2xl file:border-0 file:bg-gradient-to-br file:from-primary-600 file:via-primary-500 file:to-primary-400 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white",
+          "hover:file:saturate-110 file:shadow-sm"
+        )}
+        {...rest}
+      />
+      {hint ? <p className="text-xs text-neutral-400">{hint}</p> : null}
+    </div>
   );
 }
 
@@ -67,8 +119,8 @@ export function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement
   return (
     <textarea
       className={cx(
-        "min-h-[88px] w-full resize-y rounded-xl border border-neutral-200 bg-white/90 px-3 py-2 text-sm text-neutral-900 outline-none transition shadow-input",
-        "placeholder:text-neutral-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 disabled:bg-neutral-50 disabled:text-neutral-500",
+        "min-h-[88px] w-full resize-y py-2",
+        controlBase,
         className
       )}
       {...rest}
@@ -104,7 +156,7 @@ export function Pill({
   return (
     <span
       className={cx(
-        "inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium",
+        "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold",
         styles
       )}
     >
@@ -123,8 +175,8 @@ export function EmptyState({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-primary-200 bg-gradient-to-b from-primary-50/60 to-white py-12 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-100 text-primary-600 mb-3">
+    <div className="flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-primary-200 bg-gradient-to-b from-primary-50/70 to-white py-12 text-center">
+      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-100 text-primary-700 mb-3 shadow-sm ring-1 ring-primary-200/60">
         <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
@@ -149,9 +201,13 @@ export function StatCard({
   icon?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-neutral-200/80 bg-white px-4 py-3 shadow-sm">
-      <div className="flex items-center gap-2">
-        {icon}
+    <div className="rounded-3xl border border-neutral-200/70 bg-white/80 px-4 py-3 shadow-sm backdrop-blur">
+      <div className="flex items-center gap-2.5">
+        {icon ? (
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-primary-50 text-primary-700 ring-1 ring-primary-200/50">
+            {icon}
+          </span>
+        ) : null}
         <span className="text-xs font-semibold uppercase tracking-wider text-neutral-500">{label}</span>
       </div>
       <p className="mt-1 text-2xl font-bold tabular-nums text-neutral-900">{value}</p>

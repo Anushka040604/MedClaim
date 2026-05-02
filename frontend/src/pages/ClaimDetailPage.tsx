@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { getClaim, submitMoreInfo, takeDecision, uploadDocuments } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { formatRelativeTime } from "../lib/utils";
-import { Button, Card, Input, Label, Pill, Textarea, SuccessToast } from "../components/Ui";
+import { Button, Card, Input, Label, Pill, Textarea, SuccessToast, FileInput, Select } from "../components/Ui";
 import {
   FraudRiskRadialGauge,
   PolicyComplianceDonut,
@@ -233,7 +233,7 @@ function AiReportCard({ jsonStr, claimFraud }: { jsonStr: string | null | undefi
 
       <button
         type="button"
-        onClick={() => setShowRaw((v) => !v)}
+        onClick={() => setShowRaw((v: boolean) => !v)}
         className="text-xs font-medium text-neutral-500 hover:text-neutral-700"
       >
         {showRaw ? "Hide raw JSON" : "View raw JSON"}
@@ -445,41 +445,36 @@ export default function ClaimDetailPage() {
               <h2 className="mt-2 text-lg font-bold text-neutral-900">Add documents</h2>
               <p className="mt-0.5 text-sm text-neutral-500">PDF, JPG, or PNG. Tag each file with a type.</p>
               <div className="mt-4 space-y-4">
-                <label className="block">
-                  <span className="sr-only">Choose files</span>
-                  <input
-                    type="file"
-                    multiple
-                    accept=".pdf,image/*"
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                      const list = Array.from(e.target.files ?? []);
-                      setFiles(list);
-                      setDocTypes(list.map(() => "Other"));
-                    }}
-                    className="block w-full text-sm text-neutral-600 file:mr-3 file:rounded-lg file:border-0 file:bg-primary-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-primary-700"
-                  />
-                </label>
+                <FileInput
+                  multiple
+                  accept=".pdf,image/*"
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    const list = Array.from(e.target.files ?? []);
+                    setFiles(list);
+                    setDocTypes(list.map(() => "Other"));
+                  }}
+                  hint="PDF, JPG, or PNG. Tag each file type before uploading."
+                />
                 {files.length > 0 ? (
                   <ul className="space-y-2">
-                    {files.map((f, i) => (
+                    {files.map((f: File, i: number) => (
                       <li key={i} className="flex flex-col gap-2 rounded-lg border border-neutral-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium text-neutral-900">{f.name}</p>
                           <p className="text-xs text-neutral-500">{Math.round(f.size / 1024)} KB</p>
                         </div>
-                        <select
+                        <Select
                           value={docTypes[i] ?? "Other"}
                           onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
                             const next = [...docTypes];
                             next[i] = e.target.value;
                             setDocTypes(next);
                           }}
-                          className="h-9 rounded-lg border border-neutral-200 bg-white px-3 text-sm text-neutral-900 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                         >
                           {DOC_TYPES.map((t) => (
                             <option key={t} value={t}>{t}</option>
                           ))}
-                        </select>
+                        </Select>
                       </li>
                     ))}
                   </ul>
@@ -512,7 +507,7 @@ export default function ClaimDetailPage() {
                         href={doc.download_url}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex h-9 items-center rounded-lg border border-primary-200 px-3 text-sm font-medium text-primary-700 hover:bg-primary-50"
+                        className="inline-flex h-9 items-center rounded-xl border border-primary-200 bg-white/70 px-3 text-sm font-semibold text-primary-800 shadow-sm hover:bg-primary-50 hover:border-primary-300"
                       >
                         View / Download
                       </a>

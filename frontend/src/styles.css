@@ -16,6 +16,20 @@
 
   body {
     @apply min-h-screen bg-gradient-app text-neutral-900 font-sans antialiased;
+    position: relative;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: -1;
+    background:
+      radial-gradient(900px 520px at 12% 8%, rgba(16, 185, 129, 0.18), transparent 55%),
+      radial-gradient(860px 560px at 88% 18%, rgba(59, 130, 246, 0.12), transparent 60%),
+      radial-gradient(940px 620px at 50% 100%, rgba(5, 150, 105, 0.10), transparent 55%);
+    filter: saturate(108%);
   }
 
   ::selection {
@@ -37,11 +51,11 @@
   }
 
   .app-container {
-    @apply mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8;
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
   }
 
   .app-nav {
-    @apply sticky top-0 z-30 border-b border-primary-100/80 bg-white/90 shadow-nav backdrop-blur-md;
+    @apply sticky top-0 z-30 border-b border-neutral-200/70 bg-white/80 shadow-nav backdrop-blur-md;
   }
 
   .app-nav-inner {
@@ -54,6 +68,42 @@
 
   .app-brand-mark {
     @apply flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-primary text-[11px] font-bold tracking-tight text-white shadow-sm;
+  }
+
+  .app-layout {
+    @apply app-container grid gap-6 py-8 sm:py-10 lg:grid-cols-[260px_1fr];
+  }
+
+  .app-sidebar {
+    @apply hidden lg:block;
+  }
+
+  .app-sidebar-card {
+    @apply sticky top-20 rounded-3xl border border-neutral-200/70 bg-white/70 p-4 shadow-sm backdrop-blur;
+  }
+
+  .sidebar-title {
+    @apply px-2 text-xs font-semibold uppercase tracking-wider text-neutral-500;
+  }
+
+  .sidebar-link {
+    @apply flex items-center gap-2 rounded-2xl px-3 py-2.5 text-sm font-semibold text-neutral-700 transition;
+  }
+
+  .sidebar-link:hover {
+    @apply bg-primary-50/70 text-primary-900;
+  }
+
+  .sidebar-link-active {
+    @apply bg-gradient-to-r from-primary-600 to-primary-500 text-white shadow-sm;
+  }
+
+  .sidebar-link-icon {
+    @apply inline-flex h-8 w-8 items-center justify-center rounded-2xl bg-white/80 text-neutral-700 ring-1 ring-neutral-200/70;
+  }
+
+  .sidebar-link-active .sidebar-link-icon {
+    @apply bg-white/15 text-white ring-1 ring-white/25;
   }
 
   .page-title {

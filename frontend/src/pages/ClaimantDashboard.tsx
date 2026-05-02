@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { createClaim, deleteClaim, listClaims } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { formatRelativeTime } from "../lib/utils";
-import { Button, Card, Input, Label, Textarea, Pill, EmptyState, StatCard, SuccessToast } from "../components/Ui";
+import { Button, Card, Input, Label, Textarea, Pill, EmptyState, StatCard, SuccessToast, FileInput, Select } from "../components/Ui";
 
 const DOC_TYPES = ["Prescription", "Hospital Bill", "Lab Report", "Discharge Summary", "Consent Form", "Other"];
 
@@ -289,8 +289,7 @@ export default function ClaimantDashboard() {
               </div>
               <div>
                 <Label>Claim documents (optional)</Label>
-                <input
-                  type="file"
+                <FileInput
                   multiple
                   accept=".pdf,image/*"
                   onChange={(e) => {
@@ -298,7 +297,7 @@ export default function ClaimantDashboard() {
                     setFiles(list);
                     setDocTypes(list.map(() => "Other"));
                   }}
-                  className="mt-1 block w-full text-sm text-neutral-600 file:mr-3 file:rounded-lg file:border-0 file:bg-primary-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-primary-700"
+                  hint="PDF, JPG, or PNG. You can add document types per file below."
                 />
               </div>
               {files.length > 0 ? (
@@ -309,21 +308,20 @@ export default function ClaimantDashboard() {
                         <p className="truncate text-sm font-medium text-neutral-900">{f.name}</p>
                         <p className="text-xs text-neutral-500">{Math.round(f.size / 1024)} KB</p>
                       </div>
-                      <select
+                      <Select
                         value={docTypes[i] ?? "Other"}
                         onChange={(e) => {
                           const next = [...docTypes];
                           next[i] = e.target.value;
                           setDocTypes(next);
                         }}
-                        className="h-9 rounded-lg border border-neutral-200 bg-white px-3 text-sm text-neutral-900"
                       >
                         {DOC_TYPES.map((t) => (
                           <option key={t} value={t}>
                             {t}
                           </option>
                         ))}
-                      </select>
+                      </Select>
                     </li>
                   ))}
                 </ul>
@@ -348,15 +346,14 @@ export default function ClaimantDashboard() {
                 <p className="mt-0.5 text-sm text-neutral-500">Click a claim to upload documents and track status.</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <select
+                <Select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as "date" | "amount" | "status")}
-                  className="h-9 rounded-lg border border-neutral-200 bg-white px-3 text-sm text-neutral-700 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                 >
                   <option value="date">Newest first</option>
                   <option value="amount">Highest amount</option>
                   <option value="status">By status</option>
-                </select>
+                </Select>
                 <Button variant="secondary" onClick={refresh} size="sm">
                   Refresh
                 </Button>
@@ -387,7 +384,7 @@ export default function ClaimantDashboard() {
                         <Pill tone={c.status === "Decision" ? "success" : "info"}>{c.status}</Pill>
                         <Link
                           to={`/claims/${c.claim_id}`}
-                          className="inline-flex h-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary-600 to-primary-700 px-4 text-sm font-semibold text-white shadow-sm hover:from-primary-700 hover:to-primary-800 hover:shadow-md transition-all"
+                          className="inline-flex h-9 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-600 via-primary-500 to-primary-400 px-4 text-sm font-semibold text-white shadow-sm hover:shadow-md hover:saturate-110 transition-all"
                         >
                           Open
                         </Link>
@@ -395,7 +392,7 @@ export default function ClaimantDashboard() {
                           type="button"
                           onClick={() => handleDelete(c.claim_id)}
                           disabled={deletingId === c.claim_id}
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-red-200 bg-white text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-red-200 bg-white text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
                           title="Delete claim"
                           aria-label="Delete claim"
                         >

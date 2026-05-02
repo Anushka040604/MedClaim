@@ -92,7 +92,7 @@ export default function ApproverDashboard() {
                     <Pill tone="info">{c.status}</Pill>
                     <Link
                       to={`/claims/${c.claim_id}`}
-                      className="inline-flex h-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary-600 to-primary-700 px-4 text-sm font-semibold text-white shadow-sm hover:from-primary-700 hover:to-primary-800 hover:shadow-md transition-all"
+                      className="inline-flex h-9 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-600 via-primary-500 to-primary-400 px-4 text-sm font-semibold text-white shadow-sm hover:shadow-md hover:saturate-110 transition-all"
                     >
                       Review
                     </Link>

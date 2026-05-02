@@ -7,7 +7,12 @@ from pathlib import Path
 from typing import Any
 
 import joblib
-import numpy as np
+try:
+    import numpy as np  # type: ignore
+except Exception:  # noqa: BLE001
+    # If NumPy native extensions fail to load on Windows, keep the API usable by
+    # falling back to rule-based scoring.
+    np = None  # type: ignore[assignment]
 
 from app.ml.fraud_features import FRAUD_NUMERIC_FEATURE_ORDER, build_fraud_feature_dict
 
@@ -152,7 +157,7 @@ def analyze_fraud(
     anomaly_score = 0.0
     model_status = "rules_only"
 
-    if bundle is not None:
+    if bundle is not None and np is not None:
         try:
             fn = list(bundle["feature_names"])
             vec_ml = [float(feature_dict.get(name, 0.0)) for name in fn]
@@ -173,6 +178,10 @@ def analyze_fraud(
             fraud_prob = float(rule_score_01)
             anomaly_score = 0.0
             model_status = "rules_fallback_ml_error"
+    elif bundle is not None and np is None:
+        fraud_prob = float(rule_score_01)
+        anomaly_score = float(min(1.0, rule_score_01))
+        model_status = "rules_only_numpy_unavailable"
     else:
         fraud_prob = float(rule_score_01)
         anomaly_score = float(min(1.0, rule_score_01))
