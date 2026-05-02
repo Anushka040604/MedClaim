@@ -1,0 +1,12 @@
+{
+  "name": "medical-claim-verification",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "concurrently -k -n backend,frontend -c green,cyan \"powershell -NoProfile -ExecutionPolicy Bypass -File .\\\\backend\\\\ensure_and_run.ps1\" \"cd frontend && npm run dev\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
+

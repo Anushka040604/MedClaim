@@ -1,0 +1,40 @@
+{
+  "feature_names": [
+    "claimed_amount",
+    "treatment_date_ordinal",
+    "document_count",
+    "ocr_quality_flag_count",
+    "line_item_count_total",
+    "line_item_amount_sum",
+    "extraction_claimed_amount_sum",
+    "procedure_codes_count_total",
+    "diagnosis_codes_count_total",
+    "length_of_stay_days",
+    "policy_compliant_numeric",
+    "stage4_total_diagnosis_codes",
+    "stage4_total_procedure_codes",
+    "stage4_invalid_diagnosis_count",
+    "stage4_invalid_procedure_count",
+    "stage4_unique_diagnosis_codes",
+    "stage4_unique_procedure_codes",
+    "invalid_code_rate",
+    "amount_per_line_item",
+    "extraction_to_claimed_ratio",
+    "codes_per_document",
+    "amount_per_stay_day"
+  ],
+  "evaluation": {
+    "isolation_forest": {
+      "accuracy": 0.8725,
+      "precision": 0.7078651685393258,
+      "recall": 0.7159090909090909,
+      "f1": 0.711864406779661
+    },
+    "xgboost": {
+      "accuracy": 0.99625,
+      "precision": 1.0,
+      "recall": 0.9829545454545454,
+      "f1": 0.9914040114613181
+    }
+  }
+}

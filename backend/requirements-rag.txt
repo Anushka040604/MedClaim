@@ -1,0 +1,5 @@
+# Optional local vector store + embeddings (can require build tools on Windows)
+chromadb==0.5.23
+sentence-transformers==3.3.1
+posthog==3.5.0
+

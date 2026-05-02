@@ -1,0 +1,18 @@
+Demo Health Insurance Policy (Sample)
+
+1. Coverage
+- Inpatient hospitalization is covered after 24 hours of admission.
+- Coverage includes room rent, nursing, surgeon fees, diagnostics, medicines.
+
+2. Exclusions
+- Pre-existing diseases are excluded for the first 24 months.
+- Cosmetic and elective procedures are excluded.
+- OPD consultation is not covered unless specified by rider.
+
+3. Sub-limits
+- Room rent capped at 2% of sum insured per day.
+- ICU rent capped at 5% of sum insured per day.
+
+4. Pre-authorization
+- Planned hospitalization requires pre-authorization approval.
+

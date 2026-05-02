@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/components/aicharts.tsx","./src/components/ui.tsx","./src/lib/api.ts","./src/lib/auth.tsx","./src/lib/utils.ts","./src/pages/approverdashboard.tsx","./src/pages/claimdetailpage.tsx","./src/pages/claimantdashboard.tsx","./src/pages/loginpage.tsx"],"version":"5.9.3"}

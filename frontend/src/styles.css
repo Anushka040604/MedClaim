@@ -1,0 +1,82 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html {
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply min-h-screen bg-gradient-app text-neutral-900 font-sans antialiased;
+  }
+
+  ::selection {
+    @apply bg-primary-300 text-primary-900;
+  }
+
+  a {
+    @apply text-primary-700 hover:text-primary-800;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-primary-500/40 ring-offset-2 ring-offset-white;
+  }
+}
+
+@layer components {
+  .app-shell {
+    @apply min-h-screen;
+  }
+
+  .app-container {
+    @apply mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8;
+  }
+
+  .app-nav {
+    @apply sticky top-0 z-30 border-b border-primary-100/80 bg-white/90 shadow-nav backdrop-blur-md;
+  }
+
+  .app-nav-inner {
+    @apply app-container flex h-14 items-center justify-between gap-4;
+  }
+
+  .app-brand {
+    @apply inline-flex items-center gap-2.5 font-semibold text-neutral-900 no-underline transition hover:text-primary-700;
+  }
+
+  .app-brand-mark {
+    @apply flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-primary text-[11px] font-bold tracking-tight text-white shadow-sm;
+  }
+
+  .page-title {
+    @apply text-2xl font-bold tracking-tight text-neutral-900 sm:text-3xl;
+  }
+
+  .page-subtitle {
+    @apply mt-1 text-sm text-neutral-600;
+  }
+
+  .section-heading {
+    @apply text-xs font-semibold uppercase tracking-wider text-primary-700;
+  }
+
+  .section-heading-muted {
+    @apply text-sm font-semibold uppercase tracking-wider text-neutral-500;
+  }
+
+  .surface {
+    @apply rounded-2xl border border-neutral-200/80 bg-white shadow-sm;
+  }
+
+  .surface-soft {
+    @apply rounded-2xl border border-primary-100/70 bg-white/70 shadow-sm backdrop-blur;
+  }
+}
