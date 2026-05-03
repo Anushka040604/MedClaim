@@ -20,33 +20,48 @@ const DOC_TYPE_RANK: Record<string, number> = {
 
 // Map internal fraud flag types to human-readable text + severity
 type FlagSeverity = "critical" | "warning" | "info";
-function describeFlag(type: string, message: string): { label: string; severity: FlagSeverity; detail: string } {
+function describeFlag(
+  type: string,
+  message: string,
+  ctx?: { claimedAmount?: number; invalidCodeCount?: number; totalCodes?: number }
+): { label: string; severity: FlagSeverity; detail: string; hide?: boolean } {
   const t = String(type || "").toLowerCase();
+  // Hide "rules-only scoring" entirely — system noise, not actionable
   if (t === "ml_models_not_trained") {
-    return {
-      label: "Rules-only scoring",
-      severity: "info",
-      detail: "ML models not trained yet. Risk score uses rules-based heuristics only.",
-    };
+    return { label: "", severity: "info", detail: "", hide: true };
   }
   if (t === "invalid_medical_codes") {
+    const n = ctx?.invalidCodeCount ?? 0;
     return {
-      label: "Invalid medical codes",
+      label: n > 0 ? `${n} medical code${n === 1 ? "" : "s"} invalid` : "Invalid medical codes",
       severity: "warning",
-      detail: message || "One or more diagnosis or procedure codes failed validation.",
+      detail: ctx?.totalCodes ? `${n} of ${ctx.totalCodes} codes failed validation. Verify before approving.` : "Codes failed validation.",
     };
   }
   if (t === "amount_mismatch") {
+    // Try to parse the ratio from the legacy message: "...ratio=1.79)"
+    const ratioMatch = String(message || "").match(/ratio=([\d.]+)/);
+    const ratio = ratioMatch ? Number(ratioMatch[1]) : null;
+    const claimed = ctx?.claimedAmount;
+    const extracted = ratio && claimed ? Math.round(claimed * ratio) : null;
+    const diff = extracted && claimed ? extracted - claimed : null;
+    if (claimed != null && extracted != null && diff != null) {
+      const fmt = (n: number) => `₹${Math.abs(n).toLocaleString("en-IN")}`;
+      return {
+        label: "Amount mismatch",
+        severity: "warning",
+        detail: `Claimed ${fmt(claimed)} · Extracted ${fmt(extracted)} · ${diff > 0 ? "Over by" : "Under by"} ${fmt(diff)}`,
+      };
+    }
     return {
       label: "Amount mismatch",
       severity: "warning",
-      detail: message || "Extracted document amount does not match claimed amount.",
+      detail: claimed != null ? `Claimed ${`₹${claimed.toLocaleString("en-IN")}`}; document amount differs.` : "Document amount differs from claimed amount.",
     };
   }
   if (t === "fraud_detection_error") {
     return { label: "Risk scoring failed", severity: "critical", detail: message || "Risk model errored." };
   }
-  // Fallback: title-case the type
   const pretty = t.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   return { label: pretty || "Flag", severity: "warning", detail: message || "" };
 }
@@ -247,7 +262,9 @@ function computeVerdict(opts: {
   if (compliant === false || riskScore > 60 || criticalCount > 0) {
     return {
       label: "Likely reject",
-      sub: compliant === false ? "Policy violation" : criticalCount > 0 ? "Critical issues found" : "High risk score",
+      sub: criticalCount > 0
+        ? `${criticalCount} critical · ${warningCount} warning${warningCount === 1 ? "" : "s"}`
+        : compliant === false ? "Policy violation" : "High risk score",
       tone: "reject",
     };
   }
@@ -259,8 +276,10 @@ function computeVerdict(opts: {
     };
   }
   return {
-    label: "Needs review",
-    sub: warningCount > 0 ? `${warningCount} warning${warningCount === 1 ? "" : "s"} to check` : "Borderline signals",
+    label: warningCount > 0
+      ? `${warningCount} warning${warningCount === 1 ? "" : "s"}`
+      : "Needs review",
+    sub: warningCount > 0 ? "Review before deciding" : "Borderline signals",
     tone: "review",
   };
 }
@@ -271,12 +290,14 @@ function AiReportCard({
   claimStatus,
   history,
   docCount,
+  claimedAmount,
 }: {
   jsonStr: string | null | undefined;
   claimFraud?: ClaimFraudFields;
   claimStatus?: string;
   history?: any[];
   docCount?: number;
+  claimedAmount?: number;
 }) {
   const [showRaw, setShowRaw] = React.useState(false);
   const report = React.useMemo(() => {
@@ -348,8 +369,16 @@ function AiReportCard({
   const mergedFlags = flagsFromJson.length > 0 ? flagsFromJson : flagsFromApi;
   const s4 = codeVal?.aggregate as Record<string, unknown> | undefined;
 
-  // Decode flags into human-readable + severity, dedup
-  const describedFlags = mergedFlags.map((f) => describeFlag(String(f.type ?? ""), String((f.message ?? f.field ?? "") as string)));
+  // Decode flags into human-readable + severity, dedup, drop hidden
+  const totalInvalidCodes = s4 ? (Number(s4.invalid_diagnosis_count ?? 0) + Number(s4.invalid_procedure_count ?? 0)) : 0;
+  const totalCodes = s4 ? (Number(s4.total_diagnosis_codes ?? 0) + Number(s4.total_procedure_codes ?? 0)) : 0;
+  const describedFlags = mergedFlags
+    .map((f) => describeFlag(
+      String(f.type ?? ""),
+      String((f.message ?? f.field ?? "") as string),
+      { claimedAmount, invalidCodeCount: totalInvalidCodes, totalCodes }
+    ))
+    .filter((f) => !f.hide);
   const critical = describedFlags.filter((f) => f.severity === "critical");
   const warnings = describedFlags.filter((f) => f.severity === "warning");
   const infos = describedFlags.filter((f) => f.severity === "info");
@@ -377,9 +406,9 @@ function AiReportCard({
   });
 
   const verdictTone =
-    verdict.tone === "approve" ? "border-emerald-300 bg-emerald-50 text-emerald-900" :
-    verdict.tone === "reject" ? "border-red-300 bg-red-50 text-red-900" :
-    "border-amber-300 bg-amber-50 text-amber-900";
+    verdict.tone === "approve" ? "border-emerald-400 bg-emerald-50 text-emerald-900" :
+    verdict.tone === "reject" ? "border-red-400 bg-red-50 text-red-900" :
+    "border-amber-400 bg-amber-50 text-amber-900";
   const verdictDot =
     verdict.tone === "approve" ? "bg-emerald-500" :
     verdict.tone === "reject" ? "bg-red-500" :
@@ -390,20 +419,20 @@ function AiReportCard({
 
   return (
     <div className="space-y-3">
-      {/* VERDICT banner — first thing the eye lands on */}
+      {/* VERDICT banner — first thing the eye lands on. Risk LEFT inside box */}
       <div className={`rounded-2xl border-2 ${verdictTone} px-4 py-3`}>
-        <div className="flex items-start gap-3">
-          <span className={`mt-1 h-3 w-3 rounded-full ${verdictDot}`} />
-          <div className="flex-1 min-w-0">
-            <p className="text-base font-bold">{verdict.label}</p>
-            <p className="text-xs opacity-80">{verdict.sub}</p>
+        <div className="flex items-center gap-4">
+          <div className={`shrink-0 text-center px-3 py-1.5 rounded-lg bg-white/70 border ${band.border}`}>
+            <p className={`text-2xl font-bold tabular-nums leading-none ${band.color}`}>{String(fraudScore)}</p>
+            <p className="text-[9px] font-semibold uppercase tracking-wider text-neutral-500 mt-0.5">/100</p>
+            <p className={`text-[10px] font-bold mt-0.5 ${band.color}`}>{band.label}</p>
           </div>
-          <div className={`text-right shrink-0 px-3 py-1 rounded-lg ${band.bg} ${band.border} border`}>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Risk</p>
-            <p className={`text-lg font-bold tabular-nums leading-tight ${band.color}`}>
-              {String(fraudScore)}<span className="text-[10px] font-normal text-neutral-500">/100</span>
-            </p>
-            <p className={`text-[10px] font-semibold ${band.color}`}>{band.label}</p>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className={`h-2.5 w-2.5 rounded-full ${verdictDot}`} />
+              <p className="text-base font-bold">{verdict.label}</p>
+            </div>
+            <p className="mt-0.5 text-xs opacity-80">{verdict.sub}</p>
           </div>
         </div>
       </div>
@@ -482,23 +511,23 @@ function AiReportCard({
         </div>
       )}
 
-      {/* Codes (collapsed by default) */}
+      {/* Codes (one-line, plain English) */}
       {codeVal && codeVal.status === "ok" && s4 && (
-        <details className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs">
-          <summary className="cursor-pointer font-medium text-neutral-700">
-            Codes: {String(s4.total_diagnosis_codes ?? "—")} dx · {String(s4.total_procedure_codes ?? "—")} px
-            {(Number(s4.invalid_diagnosis_count ?? 0) + Number(s4.invalid_procedure_count ?? 0)) > 0 ? (
-              <span className="text-amber-700 font-semibold ml-1">
-                ({Number(s4.invalid_diagnosis_count ?? 0) + Number(s4.invalid_procedure_count ?? 0)} invalid)
-              </span>
-            ) : null}
-          </summary>
-          <p className="mt-1 text-neutral-600">
-            Diagnosis codes: {String(s4.total_diagnosis_codes ?? "—")} ({String(s4.invalid_diagnosis_count ?? 0)} invalid)
-            <span className="mx-1.5 text-neutral-300">·</span>
-            Procedure codes: {String(s4.total_procedure_codes ?? "—")} ({String(s4.invalid_procedure_count ?? 0)} invalid)
-          </p>
-        </details>
+        <p className="text-xs text-neutral-700 px-1">
+          {String(s4.total_diagnosis_codes ?? 0)} diagnosis code{Number(s4.total_diagnosis_codes ?? 0) === 1 ? "" : "s"}
+          {Number(s4.invalid_diagnosis_count ?? 0) > 0 ? (
+            <span className="text-amber-700 font-semibold"> ({Number(s4.invalid_diagnosis_count ?? 0)} invalid)</span>
+          ) : null}
+          {Number(s4.total_procedure_codes ?? 0) > 0 ? (
+            <>
+              <span className="mx-2 text-neutral-300">·</span>
+              {String(s4.total_procedure_codes ?? 0)} procedure code{Number(s4.total_procedure_codes ?? 0) === 1 ? "" : "s"}
+              {Number(s4.invalid_procedure_count ?? 0) > 0 ? (
+                <span className="text-amber-700 font-semibold"> ({Number(s4.invalid_procedure_count ?? 0)} invalid)</span>
+              ) : null}
+            </>
+          ) : null}
+        </p>
       )}
 
       {/* Debug-only raw JSON */}
@@ -542,6 +571,7 @@ export default function ClaimDetailPage() {
   const [additionalInfo, setAdditionalInfo] = React.useState("");
   const [moreInfoBusy, setMoreInfoBusy] = React.useState(false);
   const [pendingDecision, setPendingDecision] = React.useState<"approve" | "reject" | "request_more_info" | null>(null);
+  const [overrideApprove, setOverrideApprove] = React.useState(false);
 
   const [copied, setCopied] = React.useState(false);
 
@@ -673,6 +703,39 @@ export default function ClaimDetailPage() {
   const isApprover = state.me?.role === "approver" || state.me?.role === "admin";
   const aiReportReady = Boolean(claim.ai_report_json && String(claim.ai_report_json).trim().length > 0);
 
+  // Compute critical/warning counts from claim fraud_flags for decision panel guardrails
+  const claimFlagsRaw = Array.isArray(claim.fraud_flags) ? claim.fraud_flags : [];
+  const claimDescribed = claimFlagsRaw
+    .map((f: any) => describeFlag(String(f.type ?? ""), String((f.message ?? f.field ?? "") as string), {
+      claimedAmount: Number(claim.claimed_amount),
+    }))
+    .filter((f: ReturnType<typeof describeFlag>) => !f.hide);
+  const pageCritical = claimDescribed.filter((f: ReturnType<typeof describeFlag>) => f.severity === "critical").length;
+  const pageWarnings = claimDescribed.filter((f: ReturnType<typeof describeFlag>) => f.severity === "warning").length;
+  const hasBlockers = pageCritical > 0 || pageWarnings > 0;
+  const approveDisabled = decisionBusy || (hasBlockers && !overrideApprove);
+
+  // Quick reason chips
+  const quickReasons = [
+    pageWarnings > 0 ? "Amount mismatch" : null,
+    pageCritical > 0 ? "Critical issue found" : null,
+    "Invalid medical codes",
+    "Documents missing",
+  ].filter(Boolean) as string[];
+
+  // Auto-fill message based on action
+  function setActionDefaults(action: "approve" | "reject" | "request_more_info") {
+    if (!message.trim()) {
+      const defaults = {
+        approve: "Your claim has been approved. The settlement will be processed shortly.",
+        reject: "Your claim has been rejected. See notes for details.",
+        request_more_info: "We need additional information to process your claim. Please respond via the portal.",
+      };
+      setMessage(defaults[action]);
+    }
+    setPendingDecision(action);
+  }
+
   return (
     <>
       <nav aria-label="Breadcrumb" className="mb-3 text-xs text-neutral-500 flex items-center gap-1.5">
@@ -705,14 +768,40 @@ export default function ClaimDetailPage() {
           )}
         </button>
         <span className="text-neutral-200">|</span>
-        <Pill tone={getStatusTone(claim.status)} pulse={isProcessing(claim.status)}>{claim.status}</Pill>
-        <span className="text-neutral-200">|</span>
         <span className="text-base font-bold text-neutral-900 tabular-nums">
           ₹{Number(claim.claimed_amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
         </span>
         <span className="text-neutral-200">|</span>
-        <span className="text-xs text-neutral-600" title={new Date(claim.updated_at ?? Date.now()).toLocaleString()}>
-          {formatRelativeTime(claim.updated_at)}
+        {claim.risk_score != null ? (
+          <>
+            <span className={`text-sm font-semibold ${
+              Number(claim.risk_score) > 60 ? "text-red-700" :
+              Number(claim.risk_score) > 30 ? "text-amber-700" :
+              "text-emerald-700"
+            }`}>
+              {Number(claim.risk_score) > 60 ? "High risk" : Number(claim.risk_score) > 30 ? "Medium risk" : "Low risk"}
+            </span>
+            <span className="text-neutral-200">|</span>
+          </>
+        ) : null}
+        <Pill tone={getStatusTone(claim.status)} pulse={isProcessing(claim.status)}>{claim.status}</Pill>
+        <span className="text-neutral-200">|</span>
+        <span
+          className={`text-xs font-medium ${
+            claim.status !== "Decision" && claim.updated_at && (Date.now() - new Date(claim.updated_at).getTime()) > 24 * 3600000
+              ? "text-red-700"
+              : "text-neutral-600"
+          }`}
+          title={new Date(claim.updated_at ?? Date.now()).toLocaleString()}
+        >
+          {claim.status === "Decision"
+            ? `Decided ${formatRelativeTime(claim.updated_at)}`
+            : `Waiting: ${(() => {
+                const h = Math.max(0, (Date.now() - new Date(claim.updated_at ?? Date.now()).getTime()) / 3600000);
+                if (h < 1) return `${Math.round(h * 60)}m`;
+                if (h < 24) return `${Math.round(h)}h`;
+                return `${Math.round(h / 24)}d`;
+              })()}`}
         </span>
         <span className="ml-auto inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium text-neutral-500" title={polling ? "Auto-refresh on" : "Paused"}>
           <button
@@ -746,6 +835,7 @@ export default function ClaimDetailPage() {
                   claimStatus={claim.status}
                   history={claim.history}
                   docCount={(claim.documents ?? []).length}
+                  claimedAmount={Number(claim.claimed_amount)}
                   claimFraud={
                     {
                       fraud_probability: claim.fraud_probability,
@@ -764,6 +854,7 @@ export default function ClaimDetailPage() {
                   claimStatus={claim.status}
                   history={claim.history}
                   docCount={(claim.documents ?? []).length}
+                  claimedAmount={Number(claim.claimed_amount)}
                   claimFraud={
                     {
                       fraud_probability: claim.fraud_probability,
@@ -893,12 +984,33 @@ export default function ClaimDetailPage() {
             <Card hover className="!p-4 sm:!p-5">
               <div className="flex items-center justify-between">
                 <h2 className="text-base font-bold text-neutral-900">Decision</h2>
+                {hasBlockers ? (
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-700">
+                    {pageCritical > 0 ? `${pageCritical} critical` : `${pageWarnings} warning${pageWarnings === 1 ? "" : "s"}`}
+                  </span>
+                ) : null}
               </div>
               <div className="mt-3 space-y-3">
+                {/* Quick reason chips — clicking adds to notes */}
+                {quickReasons.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {quickReasons.map((r) => (
+                      <button
+                        key={r}
+                        type="button"
+                        onClick={() => setNotes(notes ? `${notes}; ${r}` : r)}
+                        className="inline-flex items-center rounded-full border border-neutral-200 bg-white px-2 py-0.5 text-[11px] text-neutral-700 hover:bg-neutral-50 hover:border-neutral-300"
+                      >
+                        + {r}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+
                 <div>
                   <Label>Notes (internal)</Label>
                   <Textarea
-                    rows={3}
+                    rows={2}
                     value={notes}
                     onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNotes(e.target.value)}
                     placeholder="Reason for decision"
@@ -909,24 +1021,48 @@ export default function ClaimDetailPage() {
                   <Input
                     value={message}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMessage(e.target.value)}
-                    placeholder="Shown in status history"
+                    placeholder="Auto-fills based on action"
                   />
                 </div>
+
+                {/* Override toggle when blockers exist */}
+                {hasBlockers ? (
+                  <label className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={overrideApprove}
+                      onChange={(e) => setOverrideApprove(e.target.checked)}
+                      className="mt-0.5"
+                    />
+                    <span className="text-[11px] text-amber-900 leading-snug">
+                      <strong>Override AI</strong> — approve despite {pageCritical > 0 ? "critical issues" : "warnings"}
+                    </span>
+                  </label>
+                ) : null}
+
                 {error ? (
                   <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
                     {error}
                   </div>
                 ) : null}
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                  <Button disabled={decisionBusy} onClick={() => setPendingDecision("approve")}>
+
+                {/* Big primary actions, vertical stack */}
+                <div className="space-y-2">
+                  <Button
+                    disabled={approveDisabled}
+                    onClick={() => setActionDefaults("approve")}
+                    className="!h-11 w-full !text-sm"
+                  >
                     Approve
                   </Button>
-                  <Button variant="danger" disabled={decisionBusy} onClick={() => setPendingDecision("reject")}>
-                    Reject
-                  </Button>
-                  <Button variant="ghost" disabled={decisionBusy} onClick={() => setPendingDecision("request_more_info")}>
-                    Request info
-                  </Button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button variant="danger" disabled={decisionBusy} onClick={() => setActionDefaults("reject")} className="!h-11 !text-sm">
+                      Reject
+                    </Button>
+                    <Button variant="ghost" disabled={decisionBusy} onClick={() => setActionDefaults("request_more_info")} className="!h-11 !text-sm">
+                      Request info
+                    </Button>
+                  </div>
                 </div>
               </div>
             </Card>
