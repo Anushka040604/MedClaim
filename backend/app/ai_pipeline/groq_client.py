@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import builtins
 import json
+import logging
 import math
 import threading
 import time
@@ -10,6 +12,20 @@ from typing import Any
 import httpx
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
+_real_print = builtins.print
+
+
+def print(*args, **kwargs):  # noqa: A001
+    """Safe print that survives stdout pipe closure (uvicorn reload, etc)."""
+    try:
+        _real_print(*args, **kwargs)
+    except (BrokenPipeError, OSError):
+        try:
+            logger.info(" ".join(str(a) for a in args))
+        except Exception:
+            pass
 
 
 class GroqError(RuntimeError):

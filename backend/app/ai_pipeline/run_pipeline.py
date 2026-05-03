@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 import json
 import logging
 from datetime import datetime, timezone
@@ -19,6 +20,27 @@ from app.services.fraud_detection_service import FraudDetectionResult, analyze_f
 from app.services.notifications import notify_status_change
 
 logger = logging.getLogger(__name__)
+
+_real_print = builtins.print
+
+
+def print(*args, **kwargs):  # noqa: A001 - intentional shadow within module
+    """
+    Safe print that ignores BrokenPipeError / OSError on stdout.
+
+    The AI pipeline runs in a background thread. When uvicorn reloads or its
+    stdout pipe closes, print(..., flush=True) raises BrokenPipeError, which
+    the outer Exception handler used to mistake for a pipeline failure and
+    mark the claim "AI processing failed". We swallow the I/O error and also
+    log to logger so messages still surface in structured logs.
+    """
+    try:
+        _real_print(*args, **kwargs)
+    except (BrokenPipeError, OSError):
+        try:
+            logger.info(" ".join(str(a) for a in args))
+        except Exception:
+            pass
 
 
 def _set_status(db: Session, claim: Claim, new_status: ClaimStatus, message: str | None = None) -> None:
@@ -180,6 +202,11 @@ def run_ai_pipeline_stub(claim_db_id: int, is_reprocessing: bool = False) -> Non
             db.commit()
 
             notify_status_change(to_email=None, to_phone=None, claim_id=claim.claim_id, new_status=claim.status.value)
+        except (BrokenPipeError, OSError) as e:
+            # I/O pipe issues (uvicorn stdout closed during reload) are not
+            # pipeline failures. Log and exit cleanly without poisoning the
+            # claim with a fake "error" report.
+            logger.warning("AI pipeline I/O error for claim_db_id=%s: %s", claim_db_id, e)
         except Exception as e:  # noqa: BLE001
             # Never leave a claim stuck in Processing.
             logger.exception("AI pipeline failed for claim_db_id=%s: %s", claim_db_id, e)
