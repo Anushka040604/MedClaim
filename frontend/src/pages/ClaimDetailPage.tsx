@@ -4,44 +4,116 @@ import { getClaim, submitMoreInfo, takeDecision, uploadDocuments } from "../lib/
 import { useAuth } from "../lib/auth";
 import { formatRelativeTime } from "../lib/utils";
 import { Button, Card, Input, Label, Pill, Textarea, FileInput, Select, Skeleton, ConfirmDialog, useToast, RetryError } from "../components/Ui";
-import { getStatusTone, getDecisionTone, isProcessing } from "../lib/status";
-import {
-  FraudRiskRadialGauge,
-  PolicyComplianceDonut,
-  DocumentsByTypeBar,
-  CitationsBar,
-} from "../components/AiCharts";
+import { getStatusTone, isProcessing } from "../lib/status";
 
-const DOC_TYPES = ["Prescription", "Hospital Bill", "Lab Report", "Discharge Summary", "Other"];
+const DOC_TYPES = ["Hospital Bill", "Discharge Summary", "Lab Report", "Prescription", "Consent Form", "Other"];
 
-function StatusTimeline({ history }: { history: any[] }) {
-  const items = [...history].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+// Sort order for documents (by clinical importance for an approver)
+const DOC_TYPE_RANK: Record<string, number> = {
+  "Hospital Bill": 1,
+  "Discharge Summary": 2,
+  "Lab Report": 3,
+  "Prescription": 4,
+  "Consent Form": 5,
+  "Other": 6,
+};
+
+// Map internal fraud flag types to human-readable text + severity
+type FlagSeverity = "critical" | "warning" | "info";
+function describeFlag(type: string, message: string): { label: string; severity: FlagSeverity; detail: string } {
+  const t = String(type || "").toLowerCase();
+  if (t === "ml_models_not_trained") {
+    return {
+      label: "Rules-only scoring",
+      severity: "info",
+      detail: "ML models not trained yet. Risk score uses rules-based heuristics only.",
+    };
+  }
+  if (t === "invalid_medical_codes") {
+    return {
+      label: "Invalid medical codes",
+      severity: "warning",
+      detail: message || "One or more diagnosis or procedure codes failed validation.",
+    };
+  }
+  if (t === "amount_mismatch") {
+    return {
+      label: "Amount mismatch",
+      severity: "warning",
+      detail: message || "Extracted document amount does not match claimed amount.",
+    };
+  }
+  if (t === "fraud_detection_error") {
+    return { label: "Risk scoring failed", severity: "critical", detail: message || "Risk model errored." };
+  }
+  // Fallback: title-case the type
+  const pretty = t.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  return { label: pretty || "Flag", severity: "warning", detail: message || "" };
+}
+
+// Risk score → label + color band
+function riskBand(score: number): { label: string; color: string; bg: string; border: string } {
+  if (score <= 30) return { label: "Low risk", color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200" };
+  if (score <= 60) return { label: "Medium risk", color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200" };
+  return { label: "High risk", color: "text-red-700", bg: "bg-red-50", border: "border-red-200" };
+}
+
+function StatusTimeline({ history, defaultExpanded = false }: { history: any[]; defaultExpanded?: boolean }) {
+  const [expanded, setExpanded] = React.useState(defaultExpanded);
+  // Newest first for "last 3" preview
+  const items = [...history].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  const visible = expanded ? items : items.slice(0, 3);
+  const hidden = items.length - visible.length;
+
   return (
-    <div className="space-y-4">
-      {items.map((h, i) => {
-        const isMoreInfoSubmitted = String(h.to_status || "").toLowerCase() === "more info submitted";
-        return (
-        <div key={h.id} className="flex gap-3">
-          <div className="relative flex flex-col items-center">
-            <div
-              className={`h-3 w-3 shrink-0 rounded-full ring-2 ${
-                isMoreInfoSubmitted
-                  ? "bg-gradient-to-br from-emerald-500 to-emerald-600 ring-emerald-100"
-                  : "bg-gradient-to-br from-primary-500 to-primary-600 ring-primary-100"
-              }`}
-            />
-            {i < items.length - 1 ? (
-              <div className="mt-1 h-full min-h-[8px] w-px bg-gradient-to-b from-primary-200 to-primary-100" />
-            ) : null}
-          </div>
-          <div className={`pb-2 rounded-lg px-3 py-2 -mx-1 ${isMoreInfoSubmitted ? "bg-emerald-50/60 border border-emerald-200" : "bg-primary-50/30"}`}>
-            <p className="text-sm font-semibold text-neutral-900">{h.to_status}</p>
-            <p className="text-xs text-primary-600">{new Date(h.created_at).toLocaleString()}</p>
-            {h.message ? <p className="mt-1 text-sm text-neutral-600">{h.message}</p> : null}
-          </div>
-        </div>
-      );
-      })}
+    <div>
+      <ol className="space-y-2">
+        {visible.map((h, i) => {
+          const to = String(h.to_status || "").toLowerCase();
+          const isDecision = to === "decision";
+          const isMoreInfo = to.includes("more info");
+          const dotColor = isDecision
+            ? "bg-emerald-500"
+            : isMoreInfo
+              ? "bg-amber-500"
+              : "bg-primary-500";
+          return (
+            <li key={h.id ?? i} className="flex gap-2.5">
+              <div className="flex flex-col items-center pt-1">
+                <span className={`h-2 w-2 shrink-0 rounded-full ring-2 ring-white ${dotColor}`} />
+                {i < visible.length - 1 ? <span className="mt-0.5 h-full min-h-[12px] w-px bg-neutral-200" /> : null}
+              </div>
+              <div className="flex-1 min-w-0 pb-2">
+                <div className="flex flex-wrap items-baseline justify-between gap-1">
+                  <p className="text-sm font-semibold text-neutral-900">{h.to_status}</p>
+                  <p className="text-[11px] text-neutral-500" title={new Date(h.created_at).toLocaleString()}>
+                    {formatRelativeTime(h.created_at)}
+                  </p>
+                </div>
+                {h.message ? <p className="mt-0.5 text-xs text-neutral-600">{h.message}</p> : null}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+      {hidden > 0 ? (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="mt-1 text-xs font-medium text-primary-700 hover:text-primary-900"
+        >
+          Show {hidden} earlier {hidden === 1 ? "event" : "events"}
+        </button>
+      ) : null}
+      {expanded && items.length > 3 ? (
+        <button
+          type="button"
+          onClick={() => setExpanded(false)}
+          className="mt-1 text-xs font-medium text-neutral-500 hover:text-neutral-700"
+        >
+          Collapse
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -242,144 +314,152 @@ function AiReportCard({
   const mergedFlags = flagsFromJson.length > 0 ? flagsFromJson : flagsFromApi;
   const s4 = codeVal?.aggregate as Record<string, unknown> | undefined;
 
+  // Decode flags into human-readable + severity, dedup
+  const describedFlags = mergedFlags.map((f) => describeFlag(String(f.type ?? ""), String((f.message ?? f.field ?? "") as string)));
+  const critical = describedFlags.filter((f) => f.severity === "critical");
+  const warnings = describedFlags.filter((f) => f.severity === "warning");
+  const infos = describedFlags.filter((f) => f.severity === "info");
+  const band = riskBand(fraudScore);
+
+  // Pull policy explanation: first sentence is the decision; rest is detail
+  const policyText = typeof policy?.explanation === "string" ? policy.explanation : "";
+  const firstSentenceMatch = policyText.match(/^[^.!?]+[.!?]/);
+  const policyHeadline = firstSentenceMatch ? firstSentenceMatch[0].trim() : policyText;
+  const policyRest = firstSentenceMatch ? policyText.slice(firstSentenceMatch[0].length).trim() : "";
+
+  // Suppress unused prop refs (modelStatus, anomalyS shown only on raw)
+  void modelStatus; void anomalyS; void fraudProb; void citations;
+
   return (
     <div className="space-y-3">
-      {/* AI-generated charts */}
-      <div className="rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-sm">
-        <div className="mb-3 flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-100 text-primary-600">
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-          </span>
-          <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-700">AI insights at a glance</h3>
-        </div>
-        <div
-          className="grid gap-4 overflow-hidden"
-          style={{
-            gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))",
-          }}
-        >
-          {(fraud != null || (claimFraud && (claimFraud.risk_score != null || claimFraud.fraud_probability != null))) && (
-            <div className="min-w-0 overflow-hidden" style={{ minWidth: 0 }}>
-              <FraudRiskRadialGauge score={fraudScore} riskLevel={fraudLevel} />
+      {/* Top row: Risk score (compact) + Policy compliance verdict */}
+      <div className="grid gap-3 sm:grid-cols-[auto_1fr]">
+        {/* Risk score block */}
+        {(fraud || claimFraud?.risk_score != null) && (
+          <div className={`rounded-xl border ${band.border} ${band.bg} px-4 py-3 min-w-[140px]`}>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Risk</p>
+            <div className="mt-1 flex items-baseline gap-1.5">
+              <span className={`text-3xl font-bold tabular-nums ${band.color}`}>{String(fraudScore)}</span>
+              <span className="text-xs text-neutral-500">/ 100</span>
             </div>
-          )}
-          {policy && (
-            <div className="min-w-0 overflow-hidden" style={{ minWidth: 0 }}>
-              <PolicyComplianceDonut compliant={policy.compliant as boolean | null | undefined} />
-            </div>
-          )}
-          {extraction?.documents?.length ? (
-            <div className="min-w-0 overflow-hidden" style={{ minWidth: 0 }}>
-              <DocumentsByTypeBar documents={extraction.documents} />
-            </div>
-          ) : null}
-        </div>
-        {citations.length > 0 && (
-          <div className="mt-3">
-            <CitationsBar citations={citations} />
+            <p className={`mt-0.5 text-xs font-semibold ${band.color}`}>{band.label}</p>
           </div>
         )}
-      </div>
 
-      {/* Analysis cards in 2-col grid */}
-      <div className="grid gap-3 md:grid-cols-2">
+        {/* Policy compliance — primary decision content */}
         {policy && (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-3 border-l-4 border-l-emerald-500">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-700">Policy compliance</p>
-            <div className="mt-1.5 flex flex-wrap gap-2">
+          <div className="rounded-xl border border-neutral-200 bg-white px-4 py-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Policy compliance</p>
               {policy.compliant === true && (
-                <span className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800">Compliant</span>
+                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-800">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Compliant
+                </span>
               )}
               {policy.compliant === false && (
-                <span className="inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">Not compliant</span>
+                <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Not compliant
+                </span>
               )}
             </div>
-            {typeof policy.explanation === "string" && policy.explanation ? (
-              <p className="mt-2 text-xs leading-relaxed text-neutral-700">{policy.explanation}</p>
+            {policyHeadline ? (
+              <p className="mt-1.5 text-sm font-medium leading-snug text-neutral-900">{policyHeadline}</p>
+            ) : null}
+            {policyRest ? (
+              <p className="mt-1 text-xs leading-relaxed text-neutral-600">{policyRest}</p>
             ) : null}
             {Array.isArray(policy.citations) && policy.citations.length > 0 && (
-              <p className="mt-2 text-[11px] text-neutral-500">
-                <span className="font-medium">Cited:</span>{" "}
-                {(policy.citations as Array<{ id?: string; source?: string }>).map((c) => c.source || c.id).filter(Boolean).join(", ")}
+              <p className="mt-1.5 text-[11px] text-neutral-500">
+                Cited: {(policy.citations as Array<{ id?: string; source?: string }>).map((c) => c.source || c.id).filter(Boolean).join(", ")}
               </p>
             )}
           </div>
         )}
+      </div>
 
-        {codeVal && codeVal.status === "ok" && s4 && (
-          <div className="rounded-xl border border-violet-200 bg-violet-50/30 p-3 border-l-4 border-l-violet-500">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-violet-800">ICD / CPT checks (Stage 4)</p>
-            <p className="mt-1 text-xs text-neutral-700">
-              Dx codes: <span className="font-semibold text-neutral-900">{String(s4.total_diagnosis_codes ?? "—")}</span> (invalid: {String(s4.invalid_diagnosis_count ?? 0)})
-              <span className="text-neutral-300 mx-1.5">·</span>
-              Px codes: <span className="font-semibold text-neutral-900">{String(s4.total_procedure_codes ?? "—")}</span> (invalid: {String(s4.invalid_procedure_count ?? 0)})
-            </p>
-          </div>
-        )}
+      {/* ICD / CPT compact one-liner */}
+      {codeVal && codeVal.status === "ok" && s4 && (
+        <div className="rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-xs text-neutral-700">
+          <span className="font-semibold text-neutral-900">Codes:</span>{" "}
+          {String(s4.total_diagnosis_codes ?? "—")} diagnosis ({String(s4.invalid_diagnosis_count ?? 0)} invalid)
+          <span className="text-neutral-300 mx-2">·</span>
+          {String(s4.total_procedure_codes ?? "—")} procedure ({String(s4.invalid_procedure_count ?? 0)} invalid)
+        </div>
+      )}
 
-        {extraction?.documents?.length ? (
-          <div className="rounded-xl border border-primary-200 bg-primary-50/30 p-3 border-l-4 border-l-primary-500">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-primary-700">Documents processed ({extraction.documents.length})</p>
-            <ul className="mt-1.5 space-y-0.5 text-xs text-neutral-700">
-              {extraction.documents.map((d: { document_type?: string; original_filename?: string }, i: number) => (
-                <li key={i} className="truncate">
-                  <span className="font-medium text-neutral-900">{d.original_filename || `Document ${i + 1}`}</span>
-                  <span className="text-neutral-400 mx-1">·</span>
-                  <span>{d.document_type || "—"}</span>
+      {/* Issues grouped by severity, human-mapped */}
+      {(critical.length + warnings.length + infos.length) > 0 && (
+        <div className="rounded-xl border border-neutral-200 bg-white p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 mb-2">Issues</p>
+          {critical.length > 0 && (
+            <ul className="space-y-1.5 mb-2">
+              {critical.map((f, i) => (
+                <li key={`c${i}`} className="flex gap-2 rounded-lg border border-red-200 bg-red-50/50 px-2.5 py-1.5">
+                  <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-red-500" />
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-red-900">{f.label}</p>
+                    {f.detail ? <p className="text-xs text-red-800/80 leading-snug">{f.detail}</p> : null}
+                  </div>
                 </li>
               ))}
             </ul>
-          </div>
-        ) : null}
+          )}
+          {warnings.length > 0 && (
+            <ul className="space-y-1.5 mb-2">
+              {warnings.map((f, i) => (
+                <li key={`w${i}`} className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50/50 px-2.5 py-1.5">
+                  <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-amber-500" />
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-amber-900">{f.label}</p>
+                    {f.detail ? <p className="text-xs text-amber-800/80 leading-snug">{f.detail}</p> : null}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          {infos.length > 0 && (
+            <ul className="space-y-1.5">
+              {infos.map((f, i) => (
+                <li key={`i${i}`} className="flex gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 py-1.5">
+                  <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-neutral-400" />
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-neutral-700">{f.label}</p>
+                    {f.detail ? <p className="text-xs text-neutral-600 leading-snug">{f.detail}</p> : null}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
-        {(fraud || claimFraud?.risk_score != null) && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50/30 p-3 border-l-4 border-l-amber-500 md:col-span-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-800">Fraud &amp; risk (Stage 5)</p>
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="inline-flex items-center rounded-md border border-neutral-200 bg-white px-2 py-0.5 text-xs font-medium text-neutral-700">{fraudLevel ?? "—"}</span>
-                <span className="text-xs text-neutral-500">{String(fraudScore)}/100</span>
-                {!Number.isNaN(fraudProb) && (
-                  <span className="text-xs text-neutral-500">· p={(fraudProb * 100).toFixed(1)}%</span>
-                )}
-                {!Number.isNaN(anomalyS) && <span className="text-xs text-neutral-500">· anom={anomalyS.toFixed(3)}</span>}
-                {modelStatus && (
-                  <span className="text-[11px] text-neutral-400" title="Model pipeline">{modelStatus}</span>
-                )}
-              </div>
-            </div>
-            {fraudFromJson && String(fraudFromJson.status) === "error" && (
-              <p className="mt-2 text-xs text-amber-900">Stage 5 reported an error; see flags or raw JSON.</p>
-            )}
-            {mergedFlags.length > 0 && (
-              <ul className="mt-2 grid gap-1.5 text-sm text-neutral-800 sm:grid-cols-2">
-                {mergedFlags.map((f, i) => (
-                  <li key={i} className="rounded-lg border border-amber-100 bg-white/70 px-2.5 py-1.5">
-                    <p className="font-mono text-[10px] font-semibold uppercase tracking-wider text-amber-700">
-                      {(f.type as string) || "flag"}
-                    </p>
-                    <p className="mt-0.5 text-xs leading-snug text-neutral-800">
-                      {(f.message as string) || (f.field as string) || JSON.stringify(f)}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-      </div>
+      {/* Documents processed: tiny inline list */}
+      {extraction?.documents?.length ? (
+        <details className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs">
+          <summary className="cursor-pointer font-semibold text-neutral-700 select-none">
+            Documents processed ({extraction.documents.length})
+          </summary>
+          <ul className="mt-2 space-y-0.5 text-neutral-600">
+            {extraction.documents.map((d: { document_type?: string; original_filename?: string }, i: number) => (
+              <li key={i} className="truncate">
+                <span className="font-medium text-neutral-900">{d.original_filename || `Document ${i + 1}`}</span>
+                <span className="text-neutral-300 mx-1">·</span>
+                <span>{d.document_type || "—"}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
 
       <button
         type="button"
         onClick={() => setShowRaw((v: boolean) => !v)}
-        className="text-xs font-medium text-neutral-500 hover:text-neutral-700"
+        className="text-[11px] font-medium text-neutral-400 hover:text-neutral-600"
       >
         {showRaw ? "Hide raw JSON" : "View raw JSON"}
       </button>
       {showRaw && (
-        <pre className="overflow-auto rounded-xl border border-neutral-200 bg-neutral-900 p-4 text-xs text-neutral-100">
+        <pre className="overflow-auto rounded-xl border border-neutral-200 bg-neutral-900 p-3 text-[11px] text-neutral-100">
           {jsonStr}
         </pre>
       )}
@@ -594,10 +674,16 @@ export default function ClaimDetailPage() {
                 </Button>
               </div>
             </div>
-            <div className="mt-3 flex flex-wrap gap-1.5">
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
               <Pill tone={getStatusTone(claim.status)} pulse={isProcessing(claim.status)}>{claim.status}</Pill>
-              <Pill tone={getDecisionTone(claim.decision)}>{claim.decision}</Pill>
-              <Pill tone="info">₹{Number(claim.claimed_amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</Pill>
+              {claim.decision && String(claim.decision).toLowerCase() !== "pending" ? (
+                <Pill tone={String(claim.decision).toLowerCase() === "approved" ? "success" : String(claim.decision).toLowerCase() === "rejected" ? "danger" : "warning"}>
+                  {claim.decision}
+                </Pill>
+              ) : null}
+              <span className="ml-1 text-base font-semibold text-neutral-900">
+                ₹{Number(claim.claimed_amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+              </span>
             </div>
             <dl className="mt-4 grid gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
               <div>
