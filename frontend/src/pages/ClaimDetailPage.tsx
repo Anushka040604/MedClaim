@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { getClaim, submitMoreInfo, takeDecision, uploadDocuments } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { formatRelativeTime } from "../lib/utils";
-import { Button, Card, Input, Label, Pill, Textarea, SuccessToast, FileInput, Select, Skeleton } from "../components/Ui";
+import { Button, Card, Input, Label, Pill, Textarea, FileInput, Select, Skeleton, ConfirmDialog, useToast } from "../components/Ui";
 import { getStatusTone, getDecisionTone, isProcessing } from "../lib/status";
 import {
   FraudRiskRadialGauge,
@@ -251,6 +251,7 @@ function AiReportCard({ jsonStr, claimFraud }: { jsonStr: string | null | undefi
 export default function ClaimDetailPage() {
   const { claimId } = useParams();
   const { state } = useAuth();
+  const toast = useToast();
   const [claim, setClaim] = React.useState<any | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [polling, setPolling] = React.useState(true);
@@ -266,8 +267,8 @@ export default function ClaimDetailPage() {
   const [decisionBusy, setDecisionBusy] = React.useState(false);
   const [additionalInfo, setAdditionalInfo] = React.useState("");
   const [moreInfoBusy, setMoreInfoBusy] = React.useState(false);
+  const [pendingDecision, setPendingDecision] = React.useState<"approve" | "reject" | "request_more_info" | null>(null);
 
-  const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
   const [copied, setCopied] = React.useState(false);
 
   async function refresh() {
@@ -300,17 +301,18 @@ export default function ClaimDetailPage() {
       setFiles([]);
       setDocTypes([]);
       await refresh();
-      setSuccessMessage("Documents uploaded successfully.");
-      setTimeout(() => setSuccessMessage(null), 4000);
+      toast.show("Documents uploaded successfully.", "success");
     } catch (err: any) {
       setError(err?.response?.data?.detail ?? "Upload failed");
+      toast.show("Upload failed.", "error");
     } finally {
       setUploadBusy(false);
     }
   }
 
-  async function onDecision(action: "approve" | "reject" | "request_more_info") {
-    if (!claimId) return;
+  async function executeDecision() {
+    if (!claimId || !pendingDecision) return;
+    const action = pendingDecision;
     setDecisionBusy(true);
     setError(null);
     try {
@@ -321,10 +323,17 @@ export default function ClaimDetailPage() {
         message_to_claimant: message || undefined
       });
       setClaim(updated);
-      setSuccessMessage(action === "approve" ? "Claim approved." : action === "reject" ? "Claim rejected." : "Request for more info sent.");
-      setTimeout(() => setSuccessMessage(null), 4000);
+      toast.show(
+        action === "approve" ? "Claim approved." :
+        action === "reject" ? "Claim rejected." :
+        "Request for more info sent.",
+        "success"
+      );
+      setPendingDecision(null);
     } catch (err: any) {
-      setError(err?.response?.data?.detail ?? "Decision failed");
+      const msg = err?.response?.data?.detail ?? "Decision failed";
+      setError(msg);
+      toast.show(msg, "error");
     } finally {
       setDecisionBusy(false);
     }
@@ -338,10 +347,11 @@ export default function ClaimDetailPage() {
       const updated = await submitMoreInfo({ claimId, additional_info: additionalInfo.trim() });
       setClaim(updated);
       setAdditionalInfo("");
-      setSuccessMessage("Additional information submitted. AI reprocessing started.");
-      setTimeout(() => setSuccessMessage(null), 4000);
+      toast.show("Additional information submitted. AI reprocessing started.", "success");
     } catch (err: any) {
-      setError(err?.response?.data?.detail ?? "Failed to submit additional info");
+      const msg = err?.response?.data?.detail ?? "Failed to submit additional info";
+      setError(msg);
+      toast.show(msg, "error");
     } finally {
       setMoreInfoBusy(false);
     }
@@ -391,12 +401,6 @@ export default function ClaimDetailPage() {
           <span>←</span> Back to {state.me?.role === "approver" ? "queue" : "claims"}
         </Link>
       </div>
-
-      {successMessage ? (
-        <div className="mb-4">
-          <SuccessToast show message={successMessage} />
-        </div>
-      ) : null}
 
       <div className="grid gap-8 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
@@ -607,13 +611,13 @@ export default function ClaimDetailPage() {
                   </div>
                 ) : null}
                 <div className="grid grid-cols-3 gap-2">
-                  <Button disabled={decisionBusy} onClick={() => onDecision("approve")}>
+                  <Button disabled={decisionBusy} onClick={() => setPendingDecision("approve")}>
                     Approve
                   </Button>
-                  <Button variant="danger" disabled={decisionBusy} onClick={() => onDecision("reject")}>
+                  <Button variant="danger" disabled={decisionBusy} onClick={() => setPendingDecision("reject")}>
                     Reject
                   </Button>
-                  <Button variant="ghost" disabled={decisionBusy} onClick={() => onDecision("request_more_info")}>
+                  <Button variant="ghost" disabled={decisionBusy} onClick={() => setPendingDecision("request_more_info")}>
                     Request info
                   </Button>
                 </div>
@@ -641,6 +645,31 @@ export default function ClaimDetailPage() {
           ) : null}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={pendingDecision !== null}
+        onClose={() => setPendingDecision(null)}
+        onConfirm={executeDecision}
+        title={
+          pendingDecision === "approve" ? "Approve this claim?" :
+          pendingDecision === "reject" ? "Reject this claim?" :
+          "Request more info?"
+        }
+        description={
+          pendingDecision === "approve"
+            ? "This marks the claim as approved and notifies the claimant. This decision is final."
+            : pendingDecision === "reject"
+              ? "This marks the claim as rejected and notifies the claimant. This decision is final."
+              : "This pauses the claim and asks the claimant to provide additional information. The AI pipeline will re-run when they reply."
+        }
+        confirmLabel={
+          pendingDecision === "approve" ? "Approve" :
+          pendingDecision === "reject" ? "Reject" :
+          "Send request"
+        }
+        confirmVariant={pendingDecision === "reject" ? "danger" : "primary"}
+        busy={decisionBusy}
+      />
     </>
   );
 }

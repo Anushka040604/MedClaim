@@ -5,7 +5,7 @@ import LoginPage from "./pages/LoginPage";
 import ClaimantDashboard from "./pages/ClaimantDashboard";
 import ApproverDashboard from "./pages/ApproverDashboard";
 import ClaimDetailPage from "./pages/ClaimDetailPage";
-import { Button, Skeleton, SkeletonStatRow, SkeletonList } from "./components/Ui";
+import { Button, Skeleton, SkeletonStatRow, SkeletonList, ToastProvider } from "./components/Ui";
 
 function Shell({ children }: { children: React.ReactNode }) {
   const { state, logout } = useAuth();
@@ -144,6 +144,7 @@ function Home() {
 export default function App() {
   return (
     <AuthProvider>
+      <ToastProvider>
       <Shell>
         <Routes>
           <Route path="/" element={<Home />} />
@@ -175,6 +176,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Shell>
+      </ToastProvider>
     </AuthProvider>
   );
 }

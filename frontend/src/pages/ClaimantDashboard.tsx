@@ -3,13 +3,14 @@ import { Link } from "react-router-dom";
 import { createClaim, deleteClaim, listClaims } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { formatRelativeTime } from "../lib/utils";
-import { Button, Card, Input, Label, Textarea, Pill, EmptyState, StatCard, SuccessToast, FileInput, Select, SkeletonStatRow, SkeletonList } from "../components/Ui";
+import { Button, Card, Input, Label, Textarea, Pill, EmptyState, StatCard, FileInput, Select, SkeletonStatRow, SkeletonList, ConfirmDialog, useToast } from "../components/Ui";
 import { getStatusTone, isProcessing } from "../lib/status";
 
 const DOC_TYPES = ["Prescription", "Hospital Bill", "Lab Report", "Discharge Summary", "Consent Form", "Other"];
 
 export default function ClaimantDashboard() {
   const { state } = useAuth();
+  const toast = useToast();
   const [claims, setClaims] = React.useState<any[]>([]);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -23,7 +24,7 @@ export default function ClaimantDashboard() {
   const [treatmentDate, setTreatmentDate] = React.useState("");
   const [claimedAmount, setClaimedAmount] = React.useState<number>(0);
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = React.useState<string | null>(null);
   const [sortBy, setSortBy] = React.useState<"date" | "amount" | "status">("date");
   const [files, setFiles] = React.useState<File[]>([]);
   const [docTypes, setDocTypes] = React.useState<string[]>([]);
@@ -88,8 +89,7 @@ export default function ClaimantDashboard() {
       setDocTypes([]);
       setFieldErrors({});
       await refresh();
-      setSuccessMessage("Claim submitted successfully.");
-      setTimeout(() => setSuccessMessage(null), 4000);
+      toast.show("Claim submitted successfully.", "success");
     } catch (err: any) {
       setError(err?.response?.data?.detail ?? "Failed to create claim.");
     } finally {
@@ -97,22 +97,23 @@ export default function ClaimantDashboard() {
     }
   }
 
-  async function handleDelete(claimId: string) {
-    if (!window.confirm("Delete this claim? This cannot be undone.")) return;
+  async function confirmDelete() {
+    if (!confirmDeleteId) return;
+    const claimId = confirmDeleteId;
     setDeletingId(claimId);
     try {
       await deleteClaim(claimId);
       setError(null);
       await refresh();
-      setSuccessMessage("Claim deleted.");
-      setTimeout(() => setSuccessMessage(null), 4000);
+      toast.show("Claim deleted.", "success");
     } catch (err: unknown) {
       const msg = err && typeof err === "object" && "response" in err
         ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
         : "Failed to delete claim.";
-      setError(msg ?? "Failed to delete claim.");
+      toast.show(msg ?? "Failed to delete claim.", "error");
     } finally {
       setDeletingId(null);
+      setConfirmDeleteId(null);
     }
   }
 
@@ -146,12 +147,6 @@ export default function ClaimantDashboard() {
         <h1 className="page-title">Claims</h1>
         <p className="page-subtitle text-neutral-600">Submit a new claim or open an existing one to upload documents and track status.</p>
       </div>
-
-      {successMessage ? (
-        <div className="mb-4">
-          <SuccessToast show message={successMessage} />
-        </div>
-      ) : null}
 
       <div className="mb-6">
         {loading ? (
@@ -404,7 +399,7 @@ export default function ClaimantDashboard() {
                         </Link>
                         <button
                           type="button"
-                          onClick={() => handleDelete(c.claim_id)}
+                          onClick={() => setConfirmDeleteId(c.claim_id)}
                           disabled={deletingId === c.claim_id}
                           className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-red-200 bg-white text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
                           title="Delete claim"
@@ -423,6 +418,17 @@ export default function ClaimantDashboard() {
           </Card>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmDeleteId !== null}
+        onClose={() => setConfirmDeleteId(null)}
+        onConfirm={confirmDelete}
+        title="Delete this claim?"
+        description="This permanently removes the claim and any uploaded documents. This cannot be undone."
+        confirmLabel="Delete claim"
+        confirmVariant="danger"
+        busy={deletingId !== null}
+      />
     </>
   );
 }
