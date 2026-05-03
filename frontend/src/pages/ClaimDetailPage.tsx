@@ -342,11 +342,15 @@ function AiReportCard({
             <p className="mt-2 text-sm text-amber-900">Stage 5 reported an error; see flags or raw JSON.</p>
           )}
           {mergedFlags.length > 0 && (
-            <ul className="mt-3 space-y-1.5 text-sm text-neutral-800">
+            <ul className="mt-3 space-y-2 text-sm text-neutral-800">
               {mergedFlags.map((f, i) => (
-                <li key={i} className="flex gap-2 rounded border border-amber-100/80 bg-white/60 px-2 py-1.5">
-                  <span className="shrink-0 font-mono text-xs text-amber-700">{(f.type as string) || "flag"}</span>
-                  <span className="min-w-0">{(f.message as string) || (f.field as string) || JSON.stringify(f)}</span>
+                <li key={i} className="rounded-lg border border-amber-100 bg-white/70 px-3 py-2">
+                  <p className="font-mono text-xs font-semibold uppercase tracking-wider text-amber-700">
+                    {(f.type as string) || "flag"}
+                  </p>
+                  <p className="mt-1 text-sm leading-relaxed text-neutral-800">
+                    {(f.message as string) || (f.field as string) || JSON.stringify(f)}
+                  </p>
                 </li>
               ))}
             </ul>
@@ -527,6 +531,7 @@ export default function ClaimDetailPage() {
 
   const isClaimant = state.me?.role === "claimant" || state.me?.role === "admin";
   const isApprover = state.me?.role === "approver" || state.me?.role === "admin";
+  const aiReportReady = Boolean(claim.ai_report_json && String(claim.ai_report_json).trim().length > 0);
 
   return (
     <>
@@ -693,6 +698,32 @@ export default function ClaimDetailPage() {
             </div>
           </Card>
 
+          {/* AI report renders here (full left-col width = ~2/3 of page) when data is ready */}
+          {aiReportReady && (isClaimant || isApprover) ? (
+            <Card hover className="border-l-4 border-l-primary-500">
+              <p className="section-heading">AI insights</p>
+              <h2 className="mt-2 text-lg font-bold text-neutral-900">AI report</h2>
+              <p className="mt-0.5 text-sm text-neutral-500">OCR, extraction, policy, ICD/CPT, fraud (Stage 5).</p>
+              <div className="mt-4">
+                <AiReportCard
+                  jsonStr={claim.ai_report_json}
+                  claimStatus={claim.status}
+                  history={claim.history}
+                  docCount={(claim.documents ?? []).length}
+                  claimFraud={
+                    {
+                      fraud_probability: claim.fraud_probability,
+                      anomaly_score: claim.anomaly_score,
+                      risk_score: claim.risk_score,
+                      risk_level: claim.risk_level,
+                      fraud_flags: claim.fraud_flags,
+                    } as ClaimFraudFields
+                  }
+                />
+              </div>
+            </Card>
+          ) : null}
+
           <Card hover>
             <p className="section-heading">Status</p>
             <h2 className="mt-2 text-lg font-bold text-neutral-900">Activity</h2>
@@ -704,7 +735,8 @@ export default function ClaimDetailPage() {
         </div>
 
         <div className="space-y-6">
-          {isClaimant || isApprover ? (
+          {/* Narrow AI processing/ETA card stays in right col while pipeline runs */}
+          {!aiReportReady && (isClaimant || isApprover) ? (
             <Card hover className="border-l-4 border-l-primary-500">
               <p className="section-heading">AI insights</p>
               <h2 className="mt-2 text-lg font-bold text-neutral-900">AI report</h2>
