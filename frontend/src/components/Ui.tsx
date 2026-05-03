@@ -52,10 +52,11 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
   return <button ref={ref} className={cx(base, sizes, styles, className)} {...rest} />;
 });
 
-export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
+export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(function Input(props, ref) {
   const { className = "", ...rest } = props;
   return (
     <input
+      ref={ref}
       className={cx(
         "h-10",
         controlBase,
@@ -64,7 +65,7 @@ export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
       {...rest}
     />
   );
-}
+});
 
 export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   const { className = "", children, ...rest } = props;
@@ -226,6 +227,41 @@ export function StatCard({
       </div>
       <p className="mt-1 text-2xl font-bold tabular-nums text-neutral-900">{value}</p>
       {sub != null && <p className="mt-0.5 text-xs text-neutral-500">{sub}</p>}
+    </div>
+  );
+}
+
+/** Recoverable error display with retry button */
+export function RetryError({
+  message,
+  onRetry,
+  retrying = false,
+}: {
+  message: string;
+  onRetry: () => void;
+  retrying?: boolean;
+}) {
+  return (
+    <div className="rounded-2xl border border-red-200 bg-red-50/60 p-5 text-center">
+      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-100 text-red-700">
+        <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+      </div>
+      <p className="text-sm font-semibold text-red-900">Couldn't load this</p>
+      <p className="mt-1 text-sm text-red-700">{message}</p>
+      <Button
+        variant="secondary"
+        size="sm"
+        className="mt-4 inline-flex"
+        onClick={onRetry}
+        disabled={retrying}
+      >
+        <svg className={cx("h-4 w-4", retrying && "animate-spin")} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        {retrying ? "Retrying…" : "Retry"}
+      </Button>
     </div>
   );
 }

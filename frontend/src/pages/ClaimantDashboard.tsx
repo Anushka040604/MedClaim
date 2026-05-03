@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { createClaim, deleteClaim, listClaims } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { formatRelativeTime } from "../lib/utils";
-import { Button, Card, Input, Label, Textarea, Pill, EmptyState, StatCard, FileInput, Select, SkeletonStatRow, SkeletonList, ConfirmDialog, useToast } from "../components/Ui";
+import { Button, Card, Input, Label, Textarea, Pill, EmptyState, StatCard, FileInput, Select, SkeletonStatRow, SkeletonList, ConfirmDialog, useToast, RetryError } from "../components/Ui";
 import { getStatusTone, isProcessing } from "../lib/status";
 
 const DOC_TYPES = ["Prescription", "Hospital Bill", "Lab Report", "Discharge Summary", "Consent Form", "Other"];
@@ -11,10 +11,14 @@ const DOC_TYPES = ["Prescription", "Hospital Bill", "Lab Report", "Discharge Sum
 export default function ClaimantDashboard() {
   const { state } = useAuth();
   const toast = useToast();
+  const formRef = React.useRef<HTMLFormElement | null>(null);
+  const firstFieldRef = React.useRef<HTMLInputElement | null>(null);
   const [claims, setClaims] = React.useState<any[]>([]);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [loadError, setLoadError] = React.useState<string | null>(null);
+  const [retrying, setRetrying] = React.useState(false);
 
   const [patientName, setPatientName] = React.useState("");
   const [policyNumber, setPolicyNumber] = React.useState("");
@@ -43,12 +47,28 @@ export default function ClaimantDashboard() {
   }
 
   async function refresh() {
+    setLoadError(null);
     try {
       const data = await listClaims();
       setClaims(data);
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail
+        ?? (err?.message?.toLowerCase().includes("network") ? "Cannot reach the backend. Check your connection and try again." : "Failed to load your claims.");
+      setLoadError(msg);
     } finally {
       setLoading(false);
+      setRetrying(false);
     }
+  }
+
+  async function handleRetry() {
+    setRetrying(true);
+    await refresh();
+  }
+
+  function focusForm() {
+    firstFieldRef.current?.focus();
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
   React.useEffect(() => {
@@ -182,10 +202,11 @@ export default function ClaimantDashboard() {
             <h2 className="mt-2 text-lg font-bold text-neutral-900">Submit claim details</h2>
             <p className="mt-1 text-sm text-neutral-500">You can submit claim details and documents together.</p>
 
-            <form className="mt-6 space-y-4" onSubmit={onSubmit}>
+            <form ref={formRef} className="mt-6 space-y-4" onSubmit={onSubmit}>
               <div>
                 <Label>Patient name</Label>
                 <Input
+                  ref={firstFieldRef as any}
                   required
                   value={patientName}
                   onChange={(e) => {
@@ -370,10 +391,17 @@ export default function ClaimantDashboard() {
             <div className="mt-6">
               {loading ? (
                 <SkeletonList count={4} />
+              ) : loadError ? (
+                <RetryError message={loadError} onRetry={handleRetry} retrying={retrying} />
               ) : claims.length === 0 ? (
                 <EmptyState
                   title="No claims yet"
                   description="Submit your first claim using the form on the left."
+                  action={
+                    <Button variant="primary" onClick={focusForm}>
+                      Submit your first claim
+                    </Button>
+                  }
                 />
               ) : (
                 <ul className="divide-y divide-primary-50">

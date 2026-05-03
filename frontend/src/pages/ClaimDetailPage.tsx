@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { getClaim, submitMoreInfo, takeDecision, uploadDocuments } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { formatRelativeTime } from "../lib/utils";
-import { Button, Card, Input, Label, Pill, Textarea, FileInput, Select, Skeleton, ConfirmDialog, useToast } from "../components/Ui";
+import { Button, Card, Input, Label, Pill, Textarea, FileInput, Select, Skeleton, ConfirmDialog, useToast, RetryError } from "../components/Ui";
 import { getStatusTone, getDecisionTone, isProcessing } from "../lib/status";
 import {
   FraudRiskRadialGauge,
@@ -360,9 +360,10 @@ export default function ClaimDetailPage() {
   if (!claim) {
     if (error) {
       return (
-        <Card>
-          <p className="text-sm font-medium text-red-700">{error}</p>
-        </Card>
+        <RetryError
+          message={error}
+          onRetry={() => { setError(null); refresh(); }}
+        />
       );
     }
     return (

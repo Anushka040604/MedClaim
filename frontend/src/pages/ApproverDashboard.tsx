@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { approverQueue, listClaims } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { formatRelativeTime } from "../lib/utils";
-import { Button, Card, Pill, EmptyState, StatCard, SkeletonStatRow, SkeletonList } from "../components/Ui";
+import { Button, Card, Pill, EmptyState, StatCard, SkeletonStatRow, SkeletonList, RetryError } from "../components/Ui";
 import { getStatusTone, isProcessing } from "../lib/status";
 
 export default function ApproverDashboard() {
@@ -11,6 +11,7 @@ export default function ApproverDashboard() {
   const [claims, setClaims] = React.useState<any[]>([]);
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [retrying, setRetrying] = React.useState(false);
 
   async function refresh() {
     setError(null);
@@ -18,10 +19,18 @@ export default function ApproverDashboard() {
       const data = state.me?.role === "approver" ? await approverQueue() : await listClaims();
       setClaims(data);
     } catch (err: any) {
-      setError(err?.response?.data?.detail ?? "Failed to load queue.");
+      const msg = err?.response?.data?.detail
+        ?? (err?.message?.toLowerCase().includes("network") ? "Cannot reach the backend. Check your connection and try again." : "Failed to load the review queue.");
+      setError(msg);
     } finally {
       setLoading(false);
+      setRetrying(false);
     }
+  }
+
+  async function handleRetry() {
+    setRetrying(true);
+    await refresh();
   }
 
   React.useEffect(() => {
@@ -70,19 +79,20 @@ export default function ApproverDashboard() {
           </Button>
         </div>
 
-        {error ? (
-          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
-            {error}
-          </div>
-        ) : null}
-
         <div className="mt-6">
           {loading ? (
             <SkeletonList count={4} />
+          ) : error ? (
+            <RetryError message={error} onRetry={handleRetry} retrying={retrying} />
           ) : claims.length === 0 ? (
             <EmptyState
               title="No claims in queue"
-              description="New claims will appear here when submitted by claimants."
+              description="New claims will appear here when submitted by claimants. Check back in a few minutes."
+              action={
+                <Button variant="secondary" onClick={refresh}>
+                  Refresh queue
+                </Button>
+              }
             />
           ) : (
             <ul className="divide-y divide-primary-50">
