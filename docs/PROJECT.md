@@ -209,3 +209,37 @@ make start    # backend + frontend
 **Demo logins:** `claimant@gmail.com`, `approver@gmail.com`, `admin@gmail.com` — all password `123`.
 
 **For deeper architecture detail:** see `README.md` at the repo root.
+
+---
+
+## Screenshots
+
+### Login page
+![Login](./qa-screenshots/01-landing.png)
+
+### Approver — review queue
+Alert-driven stats (SLA breach, High risk, Needs decision, Oldest pending). Table-like row with risk badge, waiting time, status. Sorted by priority (high risk + oldest).
+
+![Approver queue](./qa-screenshots/08-approver-dashboard.png)
+
+### Approver — claim detail
+Verdict-first layout. Risk score inside the verdict tile on the left. Top issues human-readable. Sticky decision sidebar with override toggle + auto-fill message.
+
+![Claim detail](./qa-screenshots/09-approver-review.png)
+
+### Admin — dashboard variant
+Same data, different lens. Alert-driven stats colored by urgency. Oldest-first sort. No "+ New claim" CTA — admin doesn't create claims.
+
+![Admin dashboard](./qa-screenshots/11-admin-dashboard.png)
+
+### Claimant — dashboard
+List-primary. "+ New claim" opens a modal form. Status filter, auto-refresh every 30s.
+
+![Claimant dashboard](./qa-screenshots/07-claimant-dashboard.png)
+
+### Fraud journey — low risk approval candidate
+Compliant policy + low risk score + no warnings → "Likely approve" verdict. Approve button enabled.
+
+![Green journey](./fraud-journeys/02-journey-green-detail.png)
+
+> Higher-risk amber/red journey screenshots not included — current test data only contains low-risk claims. To regenerate with realistic risk distribution, run the synthetic data generator and the fraud-detection pipeline against varied inputs.
