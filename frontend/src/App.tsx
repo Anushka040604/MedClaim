@@ -5,7 +5,39 @@ import LoginPage from "./pages/LoginPage";
 import ClaimantDashboard from "./pages/ClaimantDashboard";
 import ApproverDashboard from "./pages/ApproverDashboard";
 import ClaimDetailPage from "./pages/ClaimDetailPage";
-import { Button, Skeleton, SkeletonStatRow, SkeletonList, ToastProvider } from "./components/Ui";
+import { Button, Skeleton, SkeletonStatRow, SkeletonList, ToastProvider, ErrorBoundary } from "./components/Ui";
+
+function NotFoundPage() {
+  return (
+    <div className="min-h-[60vh] flex items-center justify-center px-4">
+      <div className="max-w-md w-full text-center rounded-3xl border border-neutral-200 bg-white p-8 shadow-card">
+        <p className="text-6xl font-bold text-primary-600 tracking-tight">404</p>
+        <h1 className="mt-2 text-xl font-bold text-neutral-900">Page not found</h1>
+        <p className="mt-2 text-sm text-neutral-600">
+          The page you're looking for doesn't exist or has moved.
+        </p>
+        <Link
+          to="/"
+          className="mt-6 inline-flex h-10 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-600 via-primary-500 to-primary-400 px-5 text-sm font-semibold text-white shadow-md hover:shadow-lg"
+        >
+          Go to home
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function BrandMark() {
+  return (
+    <span className="app-brand-mark">
+      <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" aria-hidden>
+        <path d="M10 3v14M3 10h14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+        <circle cx="14.5" cy="14.5" r="3" fill="currentColor" />
+        <path d="M13 14.5l1.2 1.2L16.2 13.7" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </span>
+  );
+}
 
 type Role = "claimant" | "approver" | "admin" | undefined;
 
@@ -155,8 +187,9 @@ function Shell({ children }: { children: React.ReactNode }) {
         <div className="h-0.5 w-full bg-gradient-to-r from-primary-500 via-primary-300 to-accent-500 opacity-80" />
         <div className="app-nav-inner">
           <Link to="/" className="app-brand">
-            <span className="app-brand-mark">MCV</span>
+            <BrandMark />
             <span className="hidden sm:inline">Medical Claim Verification</span>
+            <span className="sm:hidden text-sm">MedClaim</span>
           </Link>
 
           {!onAuthPage && state.me ? (
@@ -303,10 +336,18 @@ export default function App() {
                 </RequireAuth>
               }
             />
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </Shell>
       </ToastProvider>
     </AuthProvider>
+  );
+}
+
+export function AppWithBoundary() {
+  return (
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   );
 }

@@ -54,7 +54,7 @@ type ClaimFraudFields = {
   fraud_flags?: Array<Record<string, unknown>> | null;
 } | null;
 
-function AiReportCard({ jsonStr, claimFraud }: { jsonStr: string | null | undefined; claimFraud?: ClaimFraudFields }) {
+function AiReportCard({ jsonStr, claimFraud, claimStatus }: { jsonStr: string | null | undefined; claimFraud?: ClaimFraudFields; claimStatus?: string }) {
   const [showRaw, setShowRaw] = React.useState(false);
   const report = React.useMemo(() => {
     if (!jsonStr || !jsonStr.trim()) return null;
@@ -66,10 +66,35 @@ function AiReportCard({ jsonStr, claimFraud }: { jsonStr: string | null | undefi
   }, [jsonStr]);
 
   if (!report) {
+    const processing = isProcessing(claimStatus);
     return (
-      <div className="rounded-xl border border-primary-100 bg-primary-50/40 p-5 text-sm text-neutral-600">
-        No AI report yet. It is generated after the claim is submitted, documents are uploaded, and the AI pipeline finishes. Use{" "}
-        <span className="font-medium">Refresh</span> or keep <span className="font-medium">Live</span> on to poll.
+      <div className="rounded-2xl border border-primary-200 bg-primary-50/40 p-5">
+        <div className="flex items-start gap-3">
+          {processing ? (
+            <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-primary-100 text-primary-700">
+              <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            </div>
+          ) : (
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-primary-100 text-primary-700">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+          )}
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-primary-900">
+              {processing ? "AI is analyzing your claim" : "AI report not available yet"}
+            </p>
+            <p className="mt-1 text-sm text-neutral-700">
+              {processing
+                ? "This usually takes 30–60 seconds. Keep \"Live\" on to see results as they arrive."
+                : "Upload documents and the AI pipeline will run automatically. Use Refresh once it finishes."}
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
@@ -446,12 +471,22 @@ export default function ClaimDetailPage() {
                   <Pill tone="info">₹{Number(claim.claimed_amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</Pill>
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button variant="secondary" onClick={refresh} size="sm">
                   Refresh
                 </Button>
                 <Button variant="ghost" onClick={() => setPolling((p: boolean) => !p)} size="sm">
-                  {polling ? "Pause live" : "Live"}
+                  {polling ? (
+                    <>
+                      <span className="relative flex h-2 w-2">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                      </span>
+                      Live
+                    </>
+                  ) : (
+                    "Resume live"
+                  )}
                 </Button>
               </div>
             </div>
@@ -569,6 +604,7 @@ export default function ClaimDetailPage() {
               <div className="mt-4">
                 <AiReportCard
                   jsonStr={claim.ai_report_json}
+                  claimStatus={claim.status}
                   claimFraud={
                     {
                       fraud_probability: claim.fraud_probability,
@@ -611,7 +647,7 @@ export default function ClaimDetailPage() {
                     {error}
                   </div>
                 ) : null}
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                   <Button disabled={decisionBusy} onClick={() => setPendingDecision("approve")}>
                     Approve
                   </Button>

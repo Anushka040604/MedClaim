@@ -404,20 +404,23 @@ export default function ClaimantDashboard() {
                   }
                 />
               ) : (
-                <ul className="divide-y divide-primary-50">
+                <ul className="space-y-1.5">
                   {sortedClaims.map((c) => (
-                    <li key={c.claim_id} className="flex flex-col gap-3 py-4 first:pt-0 sm:flex-row sm:items-center sm:justify-between rounded-xl hover:bg-primary-50/40 transition-colors -mx-1 px-3">
+                    <li
+                      key={c.claim_id}
+                      className="flex flex-col gap-3 rounded-2xl border border-transparent px-3 py-3 transition-colors hover:border-primary-100 hover:bg-primary-50/40 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                    >
                       <div className="min-w-0">
-                        <p className="font-semibold text-neutral-900">{c.patient_name}</p>
-                        <p className="mt-0.5 text-xs text-neutral-600">
+                        <p className="truncate font-semibold text-neutral-900">{c.patient_name}</p>
+                        <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-neutral-600">
                           <span className="font-mono text-primary-700">{c.claim_id}</span>
-                          <span className="mx-1.5">·</span>
-                          {c.hospital}
-                          <span className="mx-1.5">·</span>
+                          <span className="text-neutral-300">·</span>
+                          <span className="truncate">{c.hospital}</span>
+                          <span className="text-neutral-300">·</span>
                           <span title={new Date(c.updated_at).toLocaleString()}>{formatRelativeTime(c.updated_at)}</span>
                         </p>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 shrink-0">
                         <Pill tone={getStatusTone(c.status)} pulse={isProcessing(c.status)}>{c.status}</Pill>
                         <Link
                           to={`/claims/${c.claim_id}`}
@@ -429,7 +432,7 @@ export default function ClaimantDashboard() {
                           type="button"
                           onClick={() => setConfirmDeleteId(c.claim_id)}
                           disabled={deletingId === c.claim_id}
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-red-200 bg-white text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
+                          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-red-200 bg-white text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
                           title="Delete claim"
                           aria-label="Delete claim"
                         >

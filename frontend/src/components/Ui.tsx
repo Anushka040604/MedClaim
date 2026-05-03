@@ -443,6 +443,55 @@ function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
+   Top-level error boundary
+   ──────────────────────────────────────────────────────────────────────────── */
+
+type EBProps = { children: React.ReactNode };
+type EBState = { error: Error | null };
+
+export class ErrorBoundary extends React.Component<EBProps, EBState> {
+  constructor(props: EBProps) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error: Error): EBState {
+    return { error };
+  }
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    // eslint-disable-next-line no-console
+    console.error("[ErrorBoundary]", error, info);
+  }
+  handleReload = () => {
+    this.setState({ error: null });
+    window.location.reload();
+  };
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center px-4">
+        <div className="max-w-lg w-full rounded-3xl border border-red-200 bg-white p-8 text-center shadow-card">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-100 text-red-700">
+            <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h1 className="text-xl font-bold text-neutral-900">Something went wrong</h1>
+          <p className="mt-2 text-sm text-neutral-600">
+            An unexpected error occurred. Reload the page to continue.
+          </p>
+          <pre className="mt-4 max-h-32 overflow-auto rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-left text-xs text-neutral-600">
+            {String(this.state.error?.message ?? this.state.error)}
+          </pre>
+          <Button variant="primary" className="mt-6" onClick={this.handleReload}>
+            Reload page
+          </Button>
+        </div>
+      </div>
+    );
+  }
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
    Confirm dialog (modal). ESC to close, click backdrop to close, focus trap.
    ──────────────────────────────────────────────────────────────────────────── */
 

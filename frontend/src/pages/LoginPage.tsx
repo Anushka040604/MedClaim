@@ -7,10 +7,22 @@ import { Button, Card, Input, Label } from "../components/Ui";
 export default function LoginPage() {
   const nav = useNavigate();
   const { refresh } = useAuth();
+  const emailRef = React.useRef<HTMLInputElement | null>(null);
+  const formRef = React.useRef<HTMLFormElement | null>(null);
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
+  const [shake, setShake] = React.useState(false);
+
+  React.useEffect(() => {
+    emailRef.current?.focus();
+  }, []);
+
+  function triggerShake() {
+    setShake(true);
+    setTimeout(() => setShake(false), 450);
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -31,6 +43,7 @@ export default function LoginPage() {
       } else {
         setError("Invalid email or password.");
       }
+      triggerShake();
     } finally {
       setBusy(false);
     }
@@ -72,7 +85,7 @@ export default function LoginPage() {
 
         {/* Right: Sign in */}
         <div className="flex justify-center lg:justify-end">
-          <Card className="w-full max-w-sm border-primary-200/80 shadow-card-primary">
+          <Card className={`w-full max-w-sm border-primary-200/80 shadow-card-primary ${shake ? "animate-shake" : ""}`}>
             <div className="flex items-center gap-3 pb-2">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 text-white shadow-sm">
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -85,10 +98,11 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <form className="mt-6 space-y-4" onSubmit={onSubmit}>
+            <form ref={formRef} className="mt-6 space-y-4" onSubmit={onSubmit}>
               <div>
                 <Label>Email</Label>
                 <Input
+                  ref={emailRef}
                   value={email}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
                   placeholder="name@company.com"
@@ -116,9 +130,15 @@ export default function LoginPage() {
               </Button>
             </form>
 
-            <p className="mt-6 border-t border-primary-100 pt-4 text-center text-xs text-neutral-500">
-              Demo: claimant@gmail.com · approver@gmail.com · admin@gmail.com — password 123
-            </p>
+            <div className="mt-6 border-t border-primary-100 pt-4 text-center text-xs text-neutral-500">
+              <p className="mb-2 font-medium text-neutral-600">Demo accounts</p>
+              <div className="flex flex-wrap justify-center gap-1.5">
+                <code className="rounded-md bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-700">claimant@gmail.com</code>
+                <code className="rounded-md bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-700">approver@gmail.com</code>
+                <code className="rounded-md bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-700">admin@gmail.com</code>
+              </div>
+              <p className="mt-2">Password: <code className="rounded-md bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-700">123</code></p>
+            </div>
           </Card>
         </div>
       </div>
