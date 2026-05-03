@@ -6,7 +6,7 @@ from pathlib import Path
 import httpx
 
 
-BASE = "http://127.0.0.1:8001/api"
+BASE = "http://127.0.0.1:8000/api"
 DOC_DIR = Path(
     r"C:\Users\Lenovo\Downloads\Medical Claim Verification\Medical Claim Verification\Test Documents\Fraud Claim"
 )

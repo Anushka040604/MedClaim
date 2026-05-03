@@ -55,7 +55,7 @@ See [QA-REPORT.md](QA-REPORT.md) for detailed findings, category scores, and rec
 ## Environment
 
 - **Frontend:** http://localhost:5173 (Vite, React Router)
-- **Backend:** http://localhost:8001 (FastAPI/Uvicorn)
+- **Backend:** http://localhost:8000 (FastAPI/Uvicorn)
 - **Database:** PostgreSQL (Docker)
 - **Auth:** Session-based (email/password)
 

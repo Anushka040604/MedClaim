@@ -72,7 +72,7 @@ npm install
 ```bash
 cd backend
 source .venv/bin/activate
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8001
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 **Terminal 2 — Frontend:**
@@ -83,8 +83,8 @@ npm run dev
 
 Access:
 - **Frontend:** http://localhost:5173
-- **Backend API:** http://localhost:8001
-- **API Docs:** http://localhost:8001/docs
+- **Backend API:** http://localhost:8000
+- **API Docs:** http://localhost:8000/docs
 
 ### Windows: Combined
 
@@ -112,7 +112,7 @@ This runs both backend (port 8000) and frontend (port 5173) concurrently.
 ## Troubleshooting
 
 - **bcrypt error on startup?** Ensure Python 3.13+ is used (not 3.14).
-- **Port already in use?** Change `--port 8001` to another port (e.g., 8002, 8003).
+- **Port already in use?** Change `--port 8000` to another port (e.g., 8002, 8003).
 - **Node modules error?** Run `rm -rf frontend/node_modules frontend/package-lock.json && cd frontend && npm install`.
 - **Database issues?** Delete `backend/storage/local.db` and restart—it will auto-create.
 

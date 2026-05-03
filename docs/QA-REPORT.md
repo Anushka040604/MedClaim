@@ -3,7 +3,7 @@
 **Date:** 2026-05-02  
 **Duration:** ~5 minutes  
 **App:** http://localhost:5173  
-**Backend:** http://localhost:8001  
+**Backend:** http://localhost:8000  
 **Framework:** React (Next.js or React Router)  
 **Tested by:** QA Automation (gstack /qa-only)
 
@@ -155,7 +155,7 @@ None - no blocking issues found.
 ## Browser/Environment
 
 - **App URL:** http://localhost:5173 (Vite dev server)
-- **API:** http://localhost:8001 (Uvicorn/FastAPI)
+- **API:** http://localhost:8000 (Uvicorn/FastAPI)
 - **Database:** PostgreSQL (Docker)
 - **Auth:** Session-based (cookies)
 - **Framework:** React with React Router
