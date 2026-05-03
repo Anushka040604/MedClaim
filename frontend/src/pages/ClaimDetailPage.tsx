@@ -54,7 +54,124 @@ type ClaimFraudFields = {
   fraud_flags?: Array<Record<string, unknown>> | null;
 } | null;
 
-function AiReportCard({ jsonStr, claimFraud, claimStatus }: { jsonStr: string | null | undefined; claimFraud?: ClaimFraudFields; claimStatus?: string }) {
+function findProcessingStart(history: any[] | undefined): Date | null {
+  if (!Array.isArray(history) || history.length === 0) return null;
+  const matches = history
+    .filter((h) => {
+      const to = String(h?.to_status || "").toLowerCase();
+      return to === "processing" || to.includes("ai processing started") || to.includes("ai reprocessing");
+    })
+    .map((h) => new Date(h.created_at).getTime())
+    .filter((t) => !Number.isNaN(t));
+  if (matches.length === 0) return null;
+  return new Date(Math.max(...matches));
+}
+
+function ProcessingStatus({
+  startedAt,
+  docCount,
+}: {
+  startedAt: Date | null;
+  docCount: number;
+}) {
+  const [now, setNow] = React.useState(() => Date.now());
+  React.useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const elapsedSec = startedAt ? Math.max(0, Math.floor((now - startedAt.getTime()) / 1000)) : 0;
+  const estTotalSec = Math.max(60, docCount * 45 + 60);
+  const pct = Math.min(95, Math.max(3, Math.floor((elapsedSec / estTotalSec) * 100)));
+  const remainingSec = Math.max(0, estTotalSec - elapsedSec);
+
+  const fmt = (s: number) => {
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return r === 0 ? `${m}m` : `${m}m ${r}s`;
+  };
+
+  let stage = "Reading documents (OCR)";
+  let stageNum = 1;
+  if (elapsedSec > docCount * 25) {
+    stage = "Checking policy compliance";
+    stageNum = 3;
+  } else if (elapsedSec > docCount * 15) {
+    stage = "Extracting fields";
+    stageNum = 2;
+  }
+  if (elapsedSec > docCount * 35) {
+    stage = "Running fraud detection";
+    stageNum = 5;
+  }
+
+  let helper: string;
+  if (elapsedSec < 30) {
+    helper = `ETA ~${fmt(remainingSec)}. Keep "Live" on to see results as they arrive.`;
+  } else if (elapsedSec < estTotalSec * 0.7) {
+    helper = `ETA ~${fmt(remainingSec)}. Groq API rate limits can extend this on free tier.`;
+  } else if (elapsedSec < estTotalSec * 1.3) {
+    helper = "Almost done. Final stages (policy + fraud) running now.";
+  } else {
+    helper = "Taking longer than usual. Pipeline still alive — Groq API may be rate-limiting. Hit Refresh in a minute.";
+  }
+
+  return (
+    <div className="rounded-2xl border border-primary-200 bg-primary-50/40 p-5">
+      <div className="flex items-start gap-3">
+        <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-primary-100 text-primary-700">
+          <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="text-sm font-semibold text-primary-900">AI is analyzing your claim</p>
+            {startedAt ? (
+              <p className="text-xs font-medium text-primary-700 tabular-nums">
+                {fmt(elapsedSec)} elapsed
+              </p>
+            ) : null}
+          </div>
+          <p className="mt-1 text-xs text-neutral-600">
+            Stage {stageNum} of 5: <span className="font-medium text-neutral-800">{stage}</span>
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <div className="h-2 w-full overflow-hidden rounded-full bg-primary-100">
+          <div
+            className="h-full bg-gradient-to-r from-primary-500 to-primary-400 transition-all duration-700 ease-out"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <div className="mt-2 flex items-center justify-between text-xs text-neutral-600">
+          <span>{pct}%</span>
+          <span className="tabular-nums">~{fmt(estTotalSec)} total</span>
+        </div>
+      </div>
+
+      <p className="mt-3 text-xs text-neutral-600">{helper}</p>
+    </div>
+  );
+}
+
+function AiReportCard({
+  jsonStr,
+  claimFraud,
+  claimStatus,
+  history,
+  docCount,
+}: {
+  jsonStr: string | null | undefined;
+  claimFraud?: ClaimFraudFields;
+  claimStatus?: string;
+  history?: any[];
+  docCount?: number;
+}) {
   const [showRaw, setShowRaw] = React.useState(false);
   const report = React.useMemo(() => {
     if (!jsonStr || !jsonStr.trim()) return null;
@@ -67,31 +184,22 @@ function AiReportCard({ jsonStr, claimFraud, claimStatus }: { jsonStr: string | 
 
   if (!report) {
     const processing = isProcessing(claimStatus);
+    if (processing) {
+      const startedAt = findProcessingStart(history);
+      return <ProcessingStatus startedAt={startedAt} docCount={Math.max(1, docCount ?? 1)} />;
+    }
     return (
       <div className="rounded-2xl border border-primary-200 bg-primary-50/40 p-5">
         <div className="flex items-start gap-3">
-          {processing ? (
-            <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-primary-100 text-primary-700">
-              <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-            </div>
-          ) : (
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-primary-100 text-primary-700">
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-          )}
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-primary-100 text-primary-700">
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-primary-900">
-              {processing ? "AI is analyzing your claim" : "AI report not available yet"}
-            </p>
+            <p className="text-sm font-semibold text-primary-900">AI report not available yet</p>
             <p className="mt-1 text-sm text-neutral-700">
-              {processing
-                ? "This usually takes 30–60 seconds. Keep \"Live\" on to see results as they arrive."
-                : "Upload documents and the AI pipeline will run automatically. Use Refresh once it finishes."}
+              Upload documents and the AI pipeline will run automatically. Use Refresh once it finishes.
             </p>
           </div>
         </div>
@@ -605,6 +713,8 @@ export default function ClaimDetailPage() {
                 <AiReportCard
                   jsonStr={claim.ai_report_json}
                   claimStatus={claim.status}
+                  history={claim.history}
+                  docCount={(claim.documents ?? []).length}
                   claimFraud={
                     {
                       fraud_probability: claim.fraud_probability,
