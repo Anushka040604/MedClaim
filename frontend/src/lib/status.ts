@@ -6,6 +6,7 @@ export function getStatusTone(status: string | null | undefined): PillTone {
   if (s === "decision") return "success";
   if (s === "more info requested") return "warning";
   if (s === "more info submitted") return "info";
+  if (s === "processing") return "info";
   if (s === "under review" || s === "submitted") return "info";
   if (s === "rejected") return "danger";
   if (s === "approved") return "success";
@@ -23,5 +24,5 @@ export function getDecisionTone(decision: string | null | undefined): PillTone {
 
 export function isProcessing(status: string | null | undefined): boolean {
   const s = String(status ?? "").toLowerCase().trim();
-  return s === "under review" || s === "more info submitted" || s === "submitted";
+  return s === "processing" || s === "under review" || s === "more info submitted" || s === "submitted";
 }
