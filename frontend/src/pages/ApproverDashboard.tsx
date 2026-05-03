@@ -3,13 +3,14 @@ import { Link } from "react-router-dom";
 import { approverQueue, listClaims } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { formatRelativeTime } from "../lib/utils";
-import { Button, Card, Pill, EmptyState, StatCard } from "../components/Ui";
+import { Button, Card, Pill, EmptyState, StatCard, SkeletonStatRow, SkeletonList } from "../components/Ui";
 import { getStatusTone, isProcessing } from "../lib/status";
 
 export default function ApproverDashboard() {
   const { state } = useAuth();
   const [claims, setClaims] = React.useState<any[]>([]);
   const [error, setError] = React.useState<string | null>(null);
+  const [loading, setLoading] = React.useState(true);
 
   async function refresh() {
     setError(null);
@@ -18,6 +19,8 @@ export default function ApproverDashboard() {
       setClaims(data);
     } catch (err: any) {
       setError(err?.response?.data?.detail ?? "Failed to load queue.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -35,19 +38,25 @@ export default function ApproverDashboard() {
         <p className="page-subtitle text-neutral-600">Review claims, AI reports, and take approve / reject / request-info decisions.</p>
       </div>
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-2">
-        <StatCard
-          label="In queue"
-          value={queueCount}
-          sub={queueCount === 0 ? "No claims waiting" : "Latest first"}
-          icon={<span className="text-primary-500">📋</span>}
-        />
-        <StatCard
-          label="Pending decision"
-          value={pending}
-          sub="Awaiting your action"
-          icon={<span className="text-amber-500">⏳</span>}
-        />
+      <div className="mb-6">
+        {loading ? (
+          <SkeletonStatRow count={2} />
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <StatCard
+              label="In queue"
+              value={queueCount}
+              sub={queueCount === 0 ? "No claims waiting" : "Latest first"}
+              icon={<span className="text-primary-500">📋</span>}
+            />
+            <StatCard
+              label="Pending decision"
+              value={pending}
+              sub="Awaiting your action"
+              icon={<span className="text-amber-500">⏳</span>}
+            />
+          </div>
+        )}
       </div>
 
       <Card hover>
@@ -68,7 +77,9 @@ export default function ApproverDashboard() {
         ) : null}
 
         <div className="mt-6">
-          {claims.length === 0 ? (
+          {loading ? (
+            <SkeletonList count={4} />
+          ) : claims.length === 0 ? (
             <EmptyState
               title="No claims in queue"
               description="New claims will appear here when submitted by claimants."

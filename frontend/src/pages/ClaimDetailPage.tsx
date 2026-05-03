@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { getClaim, submitMoreInfo, takeDecision, uploadDocuments } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { formatRelativeTime } from "../lib/utils";
-import { Button, Card, Input, Label, Pill, Textarea, SuccessToast, FileInput, Select } from "../components/Ui";
+import { Button, Card, Input, Label, Pill, Textarea, SuccessToast, FileInput, Select, Skeleton } from "../components/Ui";
 import { getStatusTone, getDecisionTone, isProcessing } from "../lib/status";
 import {
   FraudRiskRadialGauge,
@@ -348,10 +348,36 @@ export default function ClaimDetailPage() {
   }
 
   if (!claim) {
+    if (error) {
+      return (
+        <Card>
+          <p className="text-sm font-medium text-red-700">{error}</p>
+        </Card>
+      );
+    }
     return (
-      <Card>
-        <p className="text-sm font-medium text-neutral-600">{error ?? "Loading claim…"}</p>
-      </Card>
+      <div className="grid gap-8 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          <div className="rounded-3xl border border-neutral-200/70 bg-white/80 p-6 space-y-3">
+            <Skeleton width="220px" height="24px" />
+            <Skeleton width="320px" height="14px" />
+            <div className="flex gap-2 pt-2">
+              <Skeleton width="80px" height="24px" className="rounded-full" />
+              <Skeleton width="100px" height="24px" className="rounded-full" />
+              <Skeleton width="120px" height="24px" className="rounded-full" />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 pt-4">
+              <Skeleton variant="card" />
+              <Skeleton variant="card" />
+            </div>
+          </div>
+          <Skeleton variant="card" />
+        </div>
+        <div className="space-y-6">
+          <Skeleton variant="card" />
+          <Skeleton variant="card" />
+        </div>
+      </div>
     );
   }
 

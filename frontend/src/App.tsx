@@ -5,7 +5,7 @@ import LoginPage from "./pages/LoginPage";
 import ClaimantDashboard from "./pages/ClaimantDashboard";
 import ApproverDashboard from "./pages/ApproverDashboard";
 import ClaimDetailPage from "./pages/ClaimDetailPage";
-import { Button } from "./components/Ui";
+import { Button, Skeleton, SkeletonStatRow, SkeletonList } from "./components/Ui";
 
 function Shell({ children }: { children: React.ReactNode }) {
   const { state, logout } = useAuth();
@@ -108,8 +108,13 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   const { state } = useAuth();
   if (state.loading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <div className="text-sm font-medium text-neutral-500">Loading…</div>
+      <div className="app-container py-8 sm:py-10 space-y-6">
+        <div className="space-y-2">
+          <Skeleton width="240px" height="32px" />
+          <Skeleton width="360px" height="14px" />
+        </div>
+        <SkeletonStatRow count={3} />
+        <SkeletonList count={5} />
       </div>
     );
   }
@@ -121,8 +126,13 @@ function Home() {
   const { state } = useAuth();
   if (state.loading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <div className="text-sm font-medium text-neutral-500">Loading…</div>
+      <div className="app-container py-8 sm:py-10 space-y-6">
+        <div className="space-y-2">
+          <Skeleton width="240px" height="32px" />
+          <Skeleton width="360px" height="14px" />
+        </div>
+        <SkeletonStatRow count={3} />
+        <SkeletonList count={5} />
       </div>
     );
   }

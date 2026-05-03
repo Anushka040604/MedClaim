@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { createClaim, deleteClaim, listClaims } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { formatRelativeTime } from "../lib/utils";
-import { Button, Card, Input, Label, Textarea, Pill, EmptyState, StatCard, SuccessToast, FileInput, Select } from "../components/Ui";
+import { Button, Card, Input, Label, Textarea, Pill, EmptyState, StatCard, SuccessToast, FileInput, Select, SkeletonStatRow, SkeletonList } from "../components/Ui";
 import { getStatusTone, isProcessing } from "../lib/status";
 
 const DOC_TYPES = ["Prescription", "Hospital Bill", "Lab Report", "Discharge Summary", "Consent Form", "Other"];
@@ -13,6 +13,7 @@ export default function ClaimantDashboard() {
   const [claims, setClaims] = React.useState<any[]>([]);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [loading, setLoading] = React.useState(true);
 
   const [patientName, setPatientName] = React.useState("");
   const [policyNumber, setPolicyNumber] = React.useState("");
@@ -41,8 +42,12 @@ export default function ClaimantDashboard() {
   }
 
   async function refresh() {
-    const data = await listClaims();
-    setClaims(data);
+    try {
+      const data = await listClaims();
+      setClaims(data);
+    } finally {
+      setLoading(false);
+    }
   }
 
   React.useEffect(() => {
@@ -148,25 +153,31 @@ export default function ClaimantDashboard() {
         </div>
       ) : null}
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-3">
-        <StatCard
-          label="Total claims"
-          value={totalClaims}
-          sub={totalClaims === 0 ? "Submit your first" : undefined}
-          icon={<span className="text-primary-500">📋</span>}
-        />
-        <StatCard
-          label="Under review"
-          value={underReview}
-          sub="In progress"
-          icon={<span className="text-amber-500">⏳</span>}
-        />
-        <StatCard
-          label="Decided"
-          value={withDecision}
-          sub="Approved or rejected"
-          icon={<span className="text-emerald-500">✓</span>}
-        />
+      <div className="mb-6">
+        {loading ? (
+          <SkeletonStatRow count={3} />
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-3">
+            <StatCard
+              label="Total claims"
+              value={totalClaims}
+              sub={totalClaims === 0 ? "Submit your first" : undefined}
+              icon={<span className="text-primary-500">📋</span>}
+            />
+            <StatCard
+              label="Under review"
+              value={underReview}
+              sub="In progress"
+              icon={<span className="text-amber-500">⏳</span>}
+            />
+            <StatCard
+              label="Decided"
+              value={withDecision}
+              sub="Approved or rejected"
+              icon={<span className="text-emerald-500">✓</span>}
+            />
+          </div>
+        )}
       </div>
 
       <div className="grid gap-8 lg:grid-cols-5">
@@ -362,7 +373,9 @@ export default function ClaimantDashboard() {
             </div>
 
             <div className="mt-6">
-              {claims.length === 0 ? (
+              {loading ? (
+                <SkeletonList count={4} />
+              ) : claims.length === 0 ? (
                 <EmptyState
                   title="No claims yet"
                   description="Submit your first claim using the form on the left."

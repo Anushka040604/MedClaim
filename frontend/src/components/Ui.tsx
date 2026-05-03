@@ -230,6 +230,58 @@ export function StatCard({
   );
 }
 
+/** Skeleton placeholder for loading states */
+export function Skeleton({
+  variant = "text",
+  className,
+  width,
+  height,
+}: {
+  variant?: "text" | "card" | "list-item" | "stat" | "circle";
+  className?: string;
+  width?: string;
+  height?: string;
+}) {
+  const base = "skeleton-shimmer rounded-md";
+  const styles =
+    variant === "card"
+      ? "h-32 w-full rounded-3xl"
+      : variant === "list-item"
+        ? "h-16 w-full rounded-xl"
+        : variant === "stat"
+          ? "h-20 w-full rounded-3xl"
+          : variant === "circle"
+            ? "h-10 w-10 rounded-full"
+            : "h-4 w-full rounded";
+  return (
+    <div
+      className={cx(base, styles, className)}
+      style={{ width, height }}
+      aria-hidden
+    />
+  );
+}
+
+export function SkeletonStatRow({ count = 3 }: { count?: number }) {
+  return (
+    <div className={cx("grid gap-3", count === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3")}>
+      {Array.from({ length: count }).map((_, i) => (
+        <Skeleton key={i} variant="stat" />
+      ))}
+    </div>
+  );
+}
+
+export function SkeletonList({ count = 5 }: { count?: number }) {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: count }).map((_, i) => (
+        <Skeleton key={i} variant="list-item" />
+      ))}
+    </div>
+  );
+}
+
 /** Auto-dismiss success message */
 export function SuccessToast({ show, message }: { show: boolean; message: string }) {
   if (!show) return null;

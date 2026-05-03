@@ -129,4 +129,30 @@
   .surface-soft {
     @apply rounded-2xl border border-primary-100/70 bg-white/70 shadow-sm backdrop-blur;
   }
+
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      rgba(226, 232, 240, 0.5) 0%,
+      rgba(241, 245, 249, 0.9) 50%,
+      rgba(226, 232, 240, 0.5) 100%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-sweep 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes skeleton-sweep {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-8px); }
+  40%, 80% { transform: translateX(8px); }
+}
+
+.animate-shake {
+  animation: shake 0.4s ease-in-out;
 }
