@@ -4,6 +4,7 @@ import { createClaim, deleteClaim, listClaims } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { formatRelativeTime } from "../lib/utils";
 import { Button, Card, Input, Label, Textarea, Pill, EmptyState, StatCard, SuccessToast, FileInput, Select } from "../components/Ui";
+import { getStatusTone, isProcessing } from "../lib/status";
 
 const DOC_TYPES = ["Prescription", "Hospital Bill", "Lab Report", "Discharge Summary", "Consent Form", "Other"];
 
@@ -381,7 +382,7 @@ export default function ClaimantDashboard() {
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Pill tone={c.status === "Decision" ? "success" : "info"}>{c.status}</Pill>
+                        <Pill tone={getStatusTone(c.status)} pulse={isProcessing(c.status)}>{c.status}</Pill>
                         <Link
                           to={`/claims/${c.claim_id}`}
                           className="inline-flex h-9 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-600 via-primary-500 to-primary-400 px-4 text-sm font-semibold text-white shadow-sm hover:shadow-md hover:saturate-110 transition-all"

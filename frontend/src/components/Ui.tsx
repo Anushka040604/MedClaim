@@ -139,9 +139,11 @@ export function Label({ children }: { children: React.ReactNode }) {
 export function Pill({
   children,
   tone = "neutral",
+  pulse = false,
 }: {
   children: React.ReactNode;
   tone?: "neutral" | "info" | "success" | "warning" | "danger";
+  pulse?: boolean;
 }) {
   const styles =
     tone === "success"
@@ -153,13 +155,25 @@ export function Pill({
           : tone === "danger"
             ? "bg-red-50 text-red-800 border-red-200"
             : "bg-neutral-100 text-neutral-700 border-neutral-200";
+  const dotColor =
+    tone === "success" ? "bg-emerald-500" :
+    tone === "info" ? "bg-primary-500" :
+    tone === "warning" ? "bg-amber-500" :
+    tone === "danger" ? "bg-red-500" :
+    "bg-neutral-400";
   return (
     <span
       className={cx(
-        "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold",
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold",
         styles
       )}
     >
+      {pulse ? (
+        <span className="relative flex h-2 w-2">
+          <span className={cx("absolute inline-flex h-full w-full animate-ping rounded-full opacity-75", dotColor)} />
+          <span className={cx("relative inline-flex h-2 w-2 rounded-full", dotColor)} />
+        </span>
+      ) : null}
       {children}
     </span>
   );

@@ -4,6 +4,7 @@ import { approverQueue, listClaims } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { formatRelativeTime } from "../lib/utils";
 import { Button, Card, Pill, EmptyState, StatCard } from "../components/Ui";
+import { getStatusTone, isProcessing } from "../lib/status";
 
 export default function ApproverDashboard() {
   const { state } = useAuth();
@@ -89,7 +90,7 @@ export default function ApproverDashboard() {
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <Pill tone="info">{c.status}</Pill>
+                    <Pill tone={getStatusTone(c.status)} pulse={isProcessing(c.status)}>{c.status}</Pill>
                     <Link
                       to={`/claims/${c.claim_id}`}
                       className="inline-flex h-9 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-600 via-primary-500 to-primary-400 px-4 text-sm font-semibold text-white shadow-sm hover:shadow-md hover:saturate-110 transition-all"

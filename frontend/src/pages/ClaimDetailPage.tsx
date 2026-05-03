@@ -4,6 +4,7 @@ import { getClaim, submitMoreInfo, takeDecision, uploadDocuments } from "../lib/
 import { useAuth } from "../lib/auth";
 import { formatRelativeTime } from "../lib/utils";
 import { Button, Card, Input, Label, Pill, Textarea, SuccessToast, FileInput, Select } from "../components/Ui";
+import { getStatusTone, getDecisionTone, isProcessing } from "../lib/status";
 import {
   FraudRiskRadialGauge,
   PolicyComplianceDonut,
@@ -409,9 +410,9 @@ export default function ClaimDetailPage() {
                   ) : null}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <Pill tone="info">{claim.status}</Pill>
-                  <Pill>{claim.decision}</Pill>
-                  <Pill tone="success">₹{Number(claim.claimed_amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</Pill>
+                  <Pill tone={getStatusTone(claim.status)} pulse={isProcessing(claim.status)}>{claim.status}</Pill>
+                  <Pill tone={getDecisionTone(claim.decision)}>{claim.decision}</Pill>
+                  <Pill tone="info">₹{Number(claim.claimed_amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</Pill>
                 </div>
               </div>
               <div className="flex gap-2">
