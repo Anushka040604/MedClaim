@@ -1,5 +1,15 @@
 # Run guide
 
+**Fast path (macOS / Linux):** use the Makefile from repo root —
+
+```bash
+make setup    # one-time: backend venv + deps + .env
+make start    # backend (8000) + frontend (5173) in background
+make stop     # kill both
+```
+
+Open http://localhost:5173. Demo logins below.
+
 **Fast path (SQLite, Windows):** see **[docs/RUN.md](docs/RUN.md)** — venv, train fraud models once, `npm run dev`.
 
 This file covers **PostgreSQL via Docker** and a generic backend/frontend split.

@@ -12,7 +12,6 @@ This repo is intentionally “minimal but complete”: it has a modern UI, a rea
   - Tailwind CSS
   - React Router
   - Axios (`withCredentials`) for session-cookie auth
-  - Recharts (AI insight charts)
 - **Backend**
   - FastAPI (OpenAPI at `/docs`)
   - Session-based auth via `SessionMiddleware` (signed cookie)
@@ -180,13 +179,27 @@ Outputs `aggregate` counts (used as features in Stage 5).
   - XGBoost classifier (fraud probability)
 - Writes results to `claims` columns + `ai_report_json.stage5_fraud_scoring`
 
-## How to run (Windows, simplest)
+## How to run
 
-The most reliable path is the project runbook:
-- See `RUN.md` (repo root)
-- Also see `docs/RUN.md` (extra notes)
+### macOS / Linux — Makefile (simplest)
 
-### One-command dev mode (frontend + backend)
+From repo root:
+
+```bash
+make setup    # creates backend venv, installs deps, copies .env (one-time)
+make start    # launches backend (port 8000) + frontend (port 5173) in background
+make stop     # kills both
+make restart  # stop + start
+make clean    # removes __pycache__, dist, etc
+```
+
+Demo logins printed below. App at http://localhost:5173.
+
+### Windows — runbook
+
+See `RUN.md` (repo root) and `docs/RUN.md`.
+
+### One-command dev mode (Windows, frontend + backend)
 
 After one-time installs, run from repo root:
 
@@ -210,21 +223,21 @@ copy .env.example .env
 python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### Using backend on port 8001 (recommended on Windows when 8000 gets stuck)
+### Using backend on port 8000 (recommended on Windows when 8000 gets stuck)
 
-If port `8000` is “stuck” due to lingering Uvicorn/reload processes, run the backend on `8001`:
+If port `8000` is “stuck” due to lingering Uvicorn/reload processes, run the backend on `8000`:
 
 ```powershell
 cd backend
 .\.venv\Scripts\Activate.ps1
-$env:BACKEND_PORT="8001"
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8001
+$env:BACKEND_PORT="8000"
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 And point the frontend at it using `frontend/.env.local`:
 
 ```text
-VITE_API_BASE=http://localhost:8001/api
+VITE_API_BASE=http://localhost:8000/api
 ```
 
 ### Frontend only (manual)
@@ -299,6 +312,20 @@ python -m ml_models.train_model
 - **Harden auth**: replace fixed users + sessions with proper user management/JWT/OAuth
 - **Background jobs**: move from FastAPI `BackgroundTasks` to Celery/RQ/Arq for production
 
+## Frontend UI design
+
+The UI was redesigned end-to-end on the `design/mvp-ui-polish` branch. Key principles:
+
+- **Decision-first detail page** — claim detail shows VERDICT banner ("Likely approve / Needs review / Likely reject") at top, computed from policy compliance + risk score + critical issues. Risk number shown inside the verdict tile (left), not floating.
+- **Role-aware dashboards** —
+  - **Claimant**: list-primary, "+ New claim" opens a modal form
+  - **Approver**: alert-driven stats (SLA breach / High risk / Needs decision / Oldest pending), table-like row with risk badge + "Waiting: 6h", filters bar (risk / status / sort / SLA-only), sticky decision sidebar with override toggle when warnings exist
+  - **Admin**: same dashboard variant + extra stats, oldest-first sort, no delete button
+- **Human-readable AI flags** — internal types like `ml_models_not_trained` are hidden, `invalid_medical_codes` becomes "2 medical codes invalid", `amount_mismatch` parses ratio and shows Claimed/Extracted/Diff.
+- **Auto-refresh** — claim detail polls every 2s, dashboards every 30s. Manual Refresh buttons removed.
+- **Mobile** — hamburger drawer, breadcrumb header, responsive grids.
+- **Out of scope (needs backend)**: claim assignment to specific approvers, bulk actions, override AI risk score, audit log UI, analytics histograms, document preview modal.
+
 ## Troubleshooting
 
 - **Current known errors / issues (what they mean)**
@@ -313,11 +340,17 @@ python -m ml_models.train_model
   - **Groq `HTTP 429 Rate limit reached (TPM/RPM)`**
     - Your Groq org/tier hit tokens-per-minute or requests-per-minute. The pipeline now retries with backoff and also reduces token usage, but if you run many claims quickly you can still hit limits—wait a minute and retry.
   - **Stage 2 extraction shows `parse_error`**
-    - The LLM returned text around JSON (markdown fences / extra prose). The extractor now tries to recover JSON, but if the provider returns non-JSON repeatedly you’ll still see `parse_error` with the raw output.
+    - The LLM returned text around JSON (markdown fences / extra prose). The extractor now tries to recover JSON, but if the provider returns non-JSON repeatedly you'll still see `parse_error` with the raw output.
+  - **Claim stuck in `Processing` after backend restart**
+    - Background pipeline runs in a daemon thread. When uvicorn restarts, the thread dies. `app/main.py` now runs `_resume_orphaned_pipelines()` on startup — finds claims left in `Processing` for >10s and re-launches the pipeline as `reprocessing=True`. Just restart the backend; stuck claims pick up automatically.
+  - **`{"error": {"type": "BrokenPipeError"}}` in `ai_report_json`**
+    - Pre-fix bug: `print(..., flush=True)` in the pipeline thread raised `BrokenPipeError` when stdout closed (e.g., uvicorn reload). The outer Exception handler treated this as a real failure and poisoned the report. Fix: module-local `print()` shadow in `run_pipeline.py` and `groq_client.py` swallows `BrokenPipeError`/`OSError` and falls back to `logger.info`. Existing poisoned claims need to be reprocessed via "Submit more info".
+  - **CORS preflight 400 on `OPTIONS /api/auth/login`**
+    - Frontend at `localhost:5173`, backend `BACKEND_CORS_ORIGINS` had only `127.0.0.1`. `backend/.env` ships with both `localhost` and `127.0.0.1` variants on ports 5173–5175. If you change the frontend port, add it to that list.
   - **Windows PowerShell: `&& is not a valid statement separator`**
     - PowerShell doesn’t support `cmd`-style `&&`. Use separate lines or `;`.
   - **Port bind error `Errno 10048`**
-    - Another process is already using the port. Run on `8001` or kill the owning PID.
+    - Another process is already using the port. Run on `8000` or kill the owning PID.
   - **Broken `.venv`**
     - If the venv was moved/copied, scripts can point to old paths. Delete `backend/.venv` and re-run `backend/ensure_and_run.ps1`.
 
