@@ -479,6 +479,8 @@ export default function ClaimDetailPage() {
   const [files, setFiles] = React.useState<File[]>([]);
   const [docTypes, setDocTypes] = React.useState<string[]>([]);
   const [uploadBusy, setUploadBusy] = React.useState(false);
+  const [uploadType, setUploadType] = React.useState<string>("Hospital Bill");
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   // Decision
   const [notes, setNotes] = React.useState("");
@@ -511,16 +513,19 @@ export default function ClaimDetailPage() {
     return () => clearInterval(t);
   }, [polling, claimId]);
 
-  async function onUpload() {
-    if (!claimId) return;
+  async function autoUpload(picked: File[], typeForAll: string) {
+    if (!claimId || picked.length === 0) return;
     setUploadBusy(true);
     setError(null);
+    setFiles(picked);
+    const types = picked.map(() => typeForAll);
+    setDocTypes(types);
     try {
-      await uploadDocuments({ claimId, files, documentTypes: docTypes });
+      await uploadDocuments({ claimId, files: picked, documentTypes: types });
       setFiles([]);
       setDocTypes([]);
       await refresh();
-      toast.show("Documents uploaded successfully.", "success");
+      toast.show(`${picked.length} document${picked.length === 1 ? "" : "s"} uploaded.`, "success");
     } catch (err: any) {
       setError(err?.response?.data?.detail ?? "Upload failed");
       toast.show("Upload failed.", "error");
@@ -617,11 +622,13 @@ export default function ClaimDetailPage() {
 
   return (
     <>
-      <div className="mb-6">
-        <Link to={state.me?.role === "approver" ? "/approver" : "/claimant"} className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-600 hover:text-primary-800 transition-colors">
-          <span>←</span> Back to {state.me?.role === "approver" ? "queue" : "claims"}
+      <nav aria-label="Breadcrumb" className="mb-3 text-xs text-neutral-500 flex items-center gap-1.5">
+        <Link to={state.me?.role === "approver" ? "/approver" : "/claimant"} className="hover:text-primary-700 transition-colors">
+          {state.me?.role === "approver" ? "Review queue" : "Claims"}
         </Link>
-      </div>
+        <span className="text-neutral-300">/</span>
+        <span className="font-mono text-neutral-700">{claim.claim_id}</span>
+      </nav>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
@@ -659,19 +666,37 @@ export default function ClaimDetailPage() {
                   ) : null}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
-                <Button variant="secondary" onClick={refresh} size="sm">Refresh</Button>
-                <Button variant="ghost" onClick={() => setPolling((p: boolean) => !p)} size="sm">
+              <div className="flex items-center gap-3">
+                {/* Subtle live indicator: dot only, click to pause/resume */}
+                <button
+                  type="button"
+                  onClick={() => setPolling((p: boolean) => !p)}
+                  className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[11px] font-medium text-neutral-600 hover:bg-neutral-100"
+                  title={polling ? "Auto-refresh on. Click to pause." : "Auto-refresh paused. Click to resume."}
+                >
                   {polling ? (
-                    <>
-                      <span className="relative flex h-2 w-2">
-                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                        <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-                      </span>
-                      Live
-                    </>
-                  ) : "Resume live"}
-                </Button>
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    </span>
+                  ) : (
+                    <span className="h-1.5 w-1.5 rounded-full bg-neutral-400" />
+                  )}
+                  {polling ? "Live" : "Paused"}
+                </button>
+
+                {/* Role-based primary CTA */}
+                {isApprover && claim.status !== "Decision" ? (
+                  <div className="flex gap-1.5">
+                    <Button size="sm" disabled={decisionBusy} onClick={() => setPendingDecision("approve")}>Approve</Button>
+                    <Button size="sm" variant="danger" disabled={decisionBusy} onClick={() => setPendingDecision("reject")}>Reject</Button>
+                  </div>
+                ) : null}
+                {isClaimant && claim.status === "More Info Requested" ? (
+                  <Button size="sm" onClick={() => document.getElementById("more-info-section")?.scrollIntoView({ behavior: "smooth" })}>
+                    Submit info
+                  </Button>
+                ) : null}
               </div>
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-1.5">
@@ -706,82 +731,94 @@ export default function ClaimDetailPage() {
           </Card>
 
           {isClaimant ? (
-            <Card hover className="border-l-4 border-l-primary-500 !p-4 sm:!p-5">
-              <div className="flex items-center justify-between">
-                <h2 className="text-base font-bold text-neutral-900">Add documents</h2>
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-primary-600">Upload</span>
-              </div>
-              <div className="mt-3 space-y-3">
-                <FileInput
+            <Card hover className="!p-3 sm:!p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500 mr-1">Upload</span>
+                <Select
+                  value={uploadType}
+                  onChange={(e) => setUploadType(e.target.value)}
+                  className="!h-9 !w-auto !text-sm"
+                  disabled={uploadBusy}
+                >
+                  {DOC_TYPES.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </Select>
+                <input
+                  ref={fileInputRef}
+                  type="file"
                   multiple
                   accept=".pdf,image/*"
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                    const list = Array.from(e.target.files ?? []);
-                    setFiles(list);
-                    setDocTypes(list.map(() => "Other"));
+                  className="hidden"
+                  disabled={uploadBusy}
+                  onChange={(e) => {
+                    const picked = Array.from(e.target.files ?? []);
+                    if (picked.length > 0) {
+                      autoUpload(picked, uploadType);
+                    }
+                    if (fileInputRef.current) fileInputRef.current.value = "";
                   }}
-                  hint="PDF, JPG, or PNG. Tag each file type before uploading."
                 />
-                {files.length > 0 ? (
-                  <ul className="space-y-2">
-                    {files.map((f: File, i: number) => (
-                      <li key={i} className="flex flex-col gap-2 rounded-lg border border-neutral-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-neutral-900">{f.name}</p>
-                          <p className="text-xs text-neutral-500">{Math.round(f.size / 1024)} KB</p>
-                        </div>
-                        <Select
-                          value={docTypes[i] ?? "Other"}
-                          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-                            const next = [...docTypes];
-                            next[i] = e.target.value;
-                            setDocTypes(next);
-                          }}
-                        >
-                          {DOC_TYPES.map((t) => (
-                            <option key={t} value={t}>{t}</option>
-                          ))}
-                        </Select>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-                <div className="flex flex-wrap items-center gap-3">
-                  <Button onClick={onUpload} disabled={uploadBusy || files.length === 0}>
-                    {uploadBusy ? "Uploading…" : "Upload"}
-                  </Button>
-                  <span className="text-xs text-neutral-400">Stored locally (demo)</span>
-                </div>
+                <Button
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadBusy}
+                >
+                  {uploadBusy ? (
+                    <>
+                      <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Uploading {files.length} file{files.length === 1 ? "" : "s"}…
+                    </>
+                  ) : (
+                    "Choose files"
+                  )}
+                </Button>
+                <span className="text-[11px] text-neutral-400 ml-auto">PDF, JPG, PNG · auto-upload as {uploadType}</span>
               </div>
             </Card>
           ) : null}
 
           <Card hover className="!p-4 sm:!p-5">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-bold text-neutral-900">Uploaded documents ({(claim.documents ?? []).length})</h2>
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-primary-600">Documents</span>
+              <h2 className="text-base font-bold text-neutral-900">Documents ({(claim.documents ?? []).length})</h2>
             </div>
             <div className="mt-3">
               {(claim.documents ?? []).length === 0 ? (
-                <p className="text-sm text-neutral-500">No documents uploaded yet.</p>
+                <div className="rounded-xl border-2 border-dashed border-neutral-200 bg-neutral-50/50 px-4 py-6 text-center">
+                  <p className="text-sm font-medium text-neutral-700">No documents yet</p>
+                  <p className="mt-1 text-xs text-neutral-500">Use the upload bar above to add hospital bills, prescriptions, or lab reports.</p>
+                </div>
               ) : (
                 <ul className="grid gap-1.5 sm:grid-cols-2">
-                  {(claim.documents ?? []).map((doc: any) => (
-                    <li key={doc.id} className="flex items-center justify-between gap-2 rounded-lg border border-neutral-200 bg-white px-2.5 py-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-xs font-medium text-neutral-900">{doc.original_filename}</p>
-                        <p className="text-[11px] text-neutral-500 truncate">{doc.document_type}</p>
-                      </div>
-                      <a
-                        href={doc.download_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex h-7 shrink-0 items-center rounded-lg border border-primary-200 bg-white/70 px-2 text-[11px] font-semibold text-primary-800 hover:bg-primary-50"
-                      >
-                        View
-                      </a>
-                    </li>
-                  ))}
+                  {[...(claim.documents ?? [])]
+                    .sort((a: any, b: any) => (DOC_TYPE_RANK[a.document_type] ?? 99) - (DOC_TYPE_RANK[b.document_type] ?? 99))
+                    .map((doc: any) => {
+                      const tagColor =
+                        doc.document_type === "Hospital Bill" ? "bg-primary-50 text-primary-700 border-primary-200" :
+                        doc.document_type === "Discharge Summary" ? "bg-violet-50 text-violet-700 border-violet-200" :
+                        doc.document_type === "Lab Report" ? "bg-amber-50 text-amber-700 border-amber-200" :
+                        doc.document_type === "Prescription" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                        "bg-neutral-100 text-neutral-700 border-neutral-200";
+                      return (
+                        <li key={doc.id} className="flex items-center gap-2 rounded-lg border border-neutral-200 bg-white px-2.5 py-2">
+                          <a
+                            href={doc.download_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="min-w-0 flex-1 group"
+                            title="Open in new tab"
+                          >
+                            <p className="truncate text-xs font-medium text-neutral-900 group-hover:text-primary-700">{doc.original_filename}</p>
+                            <span className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wider mt-0.5 ${tagColor}`}>
+                              {doc.document_type || "Other"}
+                            </span>
+                          </a>
+                        </li>
+                      );
+                    })}
                 </ul>
               )}
             </div>
@@ -898,6 +935,7 @@ export default function ClaimDetailPage() {
           ) : null}
 
           {isClaimant && claim.status === "More Info Requested" ? (
+            <div id="more-info-section">
             <Card hover className="border-l-4 border-l-emerald-500 !p-4 sm:!p-5">
               <div className="flex items-center justify-between">
                 <h2 className="text-base font-bold text-neutral-900">Submit additional details</h2>
@@ -916,6 +954,7 @@ export default function ClaimDetailPage() {
                 </Button>
               </div>
             </Card>
+            </div>
           ) : null}
         </div>
       </div>
