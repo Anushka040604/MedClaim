@@ -199,44 +199,111 @@ export default function ClaimantDashboard() {
   const inReview = claims.filter((c) => isProcessing(c.status) || c.status === "Under Review" || c.status === "More Info Requested").length;
   const decided = claims.filter((c) => c.status === "Decision").length;
 
-  // Filter + sort (newest first by default)
+  // Admin-only stats
+  const isAdmin = state.me?.role === "admin";
+  const SLA_HOURS = 24;
+  const now = Date.now();
+  const ageHours = (c: any) => Math.max(0, (now - new Date(c.updated_at).getTime()) / 3600000);
+  const stuckClaims = claims.filter((c) => c.status !== "Decision" && ageHours(c) > SLA_HOURS).length;
+  const highRiskClaims = claims.filter((c) => Number(c.risk_score ?? 0) > 60).length;
+  // Avg time-to-decision: only consider Decision claims, use updated_at - created_at (proxy)
+  const decidedWithTime = claims.filter((c) => c.status === "Decision" && c.created_at && c.updated_at);
+  const avgDecisionHours = decidedWithTime.length === 0 ? null :
+    decidedWithTime.reduce((sum, c) => sum + Math.max(0, (new Date(c.updated_at).getTime() - new Date(c.created_at).getTime()) / 3600000), 0) / decidedWithTime.length;
+  const fmtHours = (h: number | null) => {
+    if (h === null) return "—";
+    if (h < 1) return `${Math.round(h * 60)}m`;
+    if (h < 24) return `${h.toFixed(1)}h`;
+    return `${(h / 24).toFixed(1)}d`;
+  };
+
+  // Filter + sort
+  const [adminSort, setAdminSort] = [["oldest"], () => {}] as any; // placeholder; real state below
+  void adminSort;
   const filtered = claims.filter((c) => statusFilter === "all" || c.status === statusFilter);
-  const sortedClaims = [...filtered].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+  // Default sort: newest first; admin uses oldest first (SLA priority)
+  const sortedClaims = [...filtered].sort((a, b) => {
+    if (isAdmin) return new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime();
+    return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+  });
 
   return (
     <>
-      {/* Page title + primary CTA */}
+      {/* Page title + role-based CTA */}
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-neutral-900">Claims</h1>
-          <p className="mt-0.5 text-sm text-neutral-600">Submit, track, and review your medical claims.</p>
-        </div>
-        <Button onClick={openCreate}>
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          New claim
-        </Button>
-      </div>
-
-      {/* Stats — In Review is primary (larger) */}
-      <div className="mb-4 grid gap-3 sm:grid-cols-4">
-        <div className="rounded-2xl border border-neutral-200 bg-white px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Total</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-neutral-900">{loading ? "—" : totalClaims}</p>
-        </div>
-        <div className="rounded-2xl border border-primary-200 bg-primary-50/60 px-5 py-4 sm:col-span-2">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-primary-700">In review</p>
-          <p className="mt-1 text-3xl font-bold tabular-nums text-primary-900">{loading ? "—" : inReview}</p>
-          <p className="mt-0.5 text-xs text-primary-700/70">
-            {inReview === 0 ? "No claims awaiting decision" : "AI processing or pending approver"}
+          <h1 className="text-2xl font-bold tracking-tight text-neutral-900">
+            {isAdmin ? "All claims" : "Claims"}
+          </h1>
+          <p className="mt-0.5 text-sm text-neutral-600">
+            {isAdmin
+              ? "Monitor system, track SLAs, spot high-risk claims."
+              : "Submit, track, and review your medical claims."}
           </p>
         </div>
-        <div className="rounded-2xl border border-neutral-200 bg-white px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Decided</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-neutral-900">{loading ? "—" : decided}</p>
-        </div>
+        {isAdmin ? (
+          <Link
+            to="/approver"
+            className="inline-flex h-10 items-center gap-2 rounded-2xl bg-gradient-to-br from-primary-600 via-primary-500 to-primary-400 px-4 text-sm font-semibold text-white shadow-md hover:shadow-lg"
+          >
+            Open queue
+          </Link>
+        ) : (
+          <Button onClick={openCreate}>
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            New claim
+          </Button>
+        )}
       </div>
+
+      {/* Stats: alert-driven for admin, In-Review-primary for claimant */}
+      {isAdmin ? (
+        <div className="mb-4 grid gap-3 sm:grid-cols-4">
+          <div className={`rounded-2xl border px-4 py-3 ${stuckClaims > 0 ? "border-red-300 bg-red-50" : "border-neutral-200 bg-white"}`}>
+            <p className={`text-[11px] font-semibold uppercase tracking-wider ${stuckClaims > 0 ? "text-red-700" : "text-neutral-500"}`}>Stuck &gt; {SLA_HOURS}h</p>
+            <p className={`mt-1 text-2xl font-bold tabular-nums ${stuckClaims > 0 ? "text-red-900" : "text-neutral-900"}`}>{loading ? "—" : stuckClaims}</p>
+            <p className={`mt-0.5 text-[11px] ${stuckClaims > 0 ? "text-red-700/80" : "text-neutral-500"}`}>
+              {stuckClaims > 0 ? "SLA breach — action needed" : "All within SLA"}
+            </p>
+          </div>
+          <div className={`rounded-2xl border px-4 py-3 ${highRiskClaims > 0 ? "border-amber-300 bg-amber-50" : "border-neutral-200 bg-white"}`}>
+            <p className={`text-[11px] font-semibold uppercase tracking-wider ${highRiskClaims > 0 ? "text-amber-700" : "text-neutral-500"}`}>High risk</p>
+            <p className={`mt-1 text-2xl font-bold tabular-nums ${highRiskClaims > 0 ? "text-amber-900" : "text-neutral-900"}`}>{loading ? "—" : highRiskClaims}</p>
+            <p className={`mt-0.5 text-[11px] ${highRiskClaims > 0 ? "text-amber-700/80" : "text-neutral-500"}`}>
+              Risk score &gt; 60
+            </p>
+          </div>
+          <div className="rounded-2xl border border-neutral-200 bg-white px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">In review</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-neutral-900">{loading ? "—" : inReview}</p>
+          </div>
+          <div className="rounded-2xl border border-neutral-200 bg-white px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Avg decision time</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-neutral-900">{loading ? "—" : fmtHours(avgDecisionHours)}</p>
+            <p className="mt-0.5 text-[11px] text-neutral-500">{decidedWithTime.length} decided</p>
+          </div>
+        </div>
+      ) : (
+        <div className="mb-4 grid gap-3 sm:grid-cols-4">
+          <div className="rounded-2xl border border-neutral-200 bg-white px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Total</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-neutral-900">{loading ? "—" : totalClaims}</p>
+          </div>
+          <div className="rounded-2xl border border-primary-200 bg-primary-50/60 px-5 py-4 sm:col-span-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-primary-700">In review</p>
+            <p className="mt-1 text-3xl font-bold tabular-nums text-primary-900">{loading ? "—" : inReview}</p>
+            <p className="mt-0.5 text-xs text-primary-700/70">
+              {inReview === 0 ? "No claims awaiting decision" : "AI processing or pending approver"}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-neutral-200 bg-white px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Decided</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-neutral-900">{loading ? "—" : decided}</p>
+          </div>
+        </div>
+      )}
 
       {/* List card */}
       <Card hover className="!p-4 sm:!p-5">
@@ -274,8 +341,20 @@ export default function ClaimantDashboard() {
           </div>
         ) : (
           <ul className="divide-y divide-neutral-100">
-            {sortedClaims.map((c) => (
-              <li key={c.claim_id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            {sortedClaims.map((c) => {
+              const age = ageHours(c);
+              const isStuck = isAdmin && c.status !== "Decision" && age > SLA_HOURS;
+              const risk = Number(c.risk_score ?? 0);
+              const riskTone =
+                risk > 60 ? "text-red-700 bg-red-50 border-red-200" :
+                risk > 30 ? "text-amber-700 bg-amber-50 border-amber-200" :
+                risk > 0 ? "text-emerald-700 bg-emerald-50 border-emerald-200" :
+                "text-neutral-500 bg-neutral-50 border-neutral-200";
+              return (
+              <li
+                key={c.claim_id}
+                className={`flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 ${isStuck ? "bg-red-50/40 -mx-3 px-3 rounded" : ""}`}
+              >
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                     <span className="font-mono text-sm font-semibold text-neutral-900">{c.claim_id}</span>
@@ -289,10 +368,20 @@ export default function ClaimantDashboard() {
                     <span className="text-neutral-300">·</span>
                     <span className="truncate">{c.hospital}</span>
                     <span className="text-neutral-300">·</span>
-                    <span title={new Date(c.updated_at).toLocaleString()}>{formatRelativeTime(c.updated_at)}</span>
+                    <span
+                      title={new Date(c.updated_at).toLocaleString()}
+                      className={isStuck ? "font-semibold text-red-700" : ""}
+                    >
+                      {isStuck ? `${Math.round(age)}h waiting` : formatRelativeTime(c.updated_at)}
+                    </span>
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                  {isAdmin && c.risk_score != null ? (
+                    <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${riskTone}`} title={`Risk score ${risk}/100`}>
+                      {risk}
+                    </span>
+                  ) : null}
                   <Pill tone={getStatusTone(c.status)} pulse={isProcessing(c.status)}>{c.status}</Pill>
                   <Link
                     to={`/claims/${c.claim_id}`}
@@ -300,21 +389,24 @@ export default function ClaimantDashboard() {
                   >
                     View
                   </Link>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmDeleteId(c.claim_id)}
-                    disabled={deletingId === c.claim_id}
-                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-neutral-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 transition-colors"
-                    title="Delete claim"
-                    aria-label="Delete claim"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
+                  {!isAdmin ? (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteId(c.claim_id)}
+                      disabled={deletingId === c.claim_id}
+                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-neutral-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 transition-colors"
+                      title="Delete claim"
+                      aria-label="Delete claim"
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  ) : null}
                 </div>
               </li>
-            ))}
+            );
+            })}
           </ul>
         )}
       </Card>
