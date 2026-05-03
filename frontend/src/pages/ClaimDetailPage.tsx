@@ -58,11 +58,11 @@ function riskBand(score: number): { label: string; color: string; bg: string; bo
   return { label: "High risk", color: "text-red-700", bg: "bg-red-50", border: "border-red-200" };
 }
 
-function StatusTimeline({ history, defaultExpanded = false }: { history: any[]; defaultExpanded?: boolean }) {
+function StatusTimeline({ history, defaultExpanded = false, previewCount = 1 }: { history: any[]; defaultExpanded?: boolean; previewCount?: number }) {
   const [expanded, setExpanded] = React.useState(defaultExpanded);
-  // Newest first for "last 3" preview
+  // Newest first for "last N" preview
   const items = [...history].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  const visible = expanded ? items : items.slice(0, 3);
+  const visible = expanded ? items : items.slice(0, previewCount);
   const hidden = items.length - visible.length;
 
   return (
@@ -231,6 +231,40 @@ function ProcessingStatus({
   );
 }
 
+type Verdict = {
+  label: string;
+  sub: string;
+  tone: "approve" | "reject" | "review";
+};
+
+function computeVerdict(opts: {
+  compliant: boolean | null | undefined;
+  riskScore: number;
+  criticalCount: number;
+  warningCount: number;
+}): Verdict {
+  const { compliant, riskScore, criticalCount, warningCount } = opts;
+  if (compliant === false || riskScore > 60 || criticalCount > 0) {
+    return {
+      label: "Likely reject",
+      sub: compliant === false ? "Policy violation" : criticalCount > 0 ? "Critical issues found" : "High risk score",
+      tone: "reject",
+    };
+  }
+  if (compliant === true && riskScore <= 30 && warningCount === 0) {
+    return {
+      label: "Likely approve",
+      sub: "Compliant · low risk · no warnings",
+      tone: "approve",
+    };
+  }
+  return {
+    label: "Needs review",
+    sub: warningCount > 0 ? `${warningCount} warning${warningCount === 1 ? "" : "s"} to check` : "Borderline signals",
+    tone: "review",
+  };
+}
+
 function AiReportCard({
   jsonStr,
   claimFraud,
@@ -327,139 +361,158 @@ function AiReportCard({
   const policyHeadline = firstSentenceMatch ? firstSentenceMatch[0].trim() : policyText;
   const policyRest = firstSentenceMatch ? policyText.slice(firstSentenceMatch[0].length).trim() : "";
 
-  // Suppress unused prop refs (modelStatus, anomalyS shown only on raw)
-  void modelStatus; void anomalyS; void fraudProb; void citations;
+  // Suppress unused prop refs
+  void modelStatus; void anomalyS; void fraudProb; void citations; void docCount; void history;
+
+  // Top issues (max 2) — critical first then warnings, infos hidden by default
+  const topIssues = [...critical, ...warnings].slice(0, 2);
+  const remainingIssues = critical.length + warnings.length + infos.length - topIssues.length;
+
+  // Verdict computed from compliance + risk + critical count
+  const verdict = computeVerdict({
+    compliant: policy?.compliant as boolean | null | undefined,
+    riskScore: fraudScore,
+    criticalCount: critical.length,
+    warningCount: warnings.length,
+  });
+
+  const verdictTone =
+    verdict.tone === "approve" ? "border-emerald-300 bg-emerald-50 text-emerald-900" :
+    verdict.tone === "reject" ? "border-red-300 bg-red-50 text-red-900" :
+    "border-amber-300 bg-amber-50 text-amber-900";
+  const verdictDot =
+    verdict.tone === "approve" ? "bg-emerald-500" :
+    verdict.tone === "reject" ? "bg-red-500" :
+    "bg-amber-500";
+
+  // Debug mode: show raw JSON only when ?debug=1 in URL
+  const showDebug = typeof window !== "undefined" && window.location.search.includes("debug=1");
 
   return (
     <div className="space-y-3">
-      {/* Top row: Risk score (compact) + Policy compliance verdict */}
-      <div className="grid gap-3 sm:grid-cols-[auto_1fr]">
-        {/* Risk score block */}
-        {(fraud || claimFraud?.risk_score != null) && (
-          <div className={`rounded-xl border ${band.border} ${band.bg} px-4 py-3 min-w-[140px]`}>
+      {/* VERDICT banner — first thing the eye lands on */}
+      <div className={`rounded-2xl border-2 ${verdictTone} px-4 py-3`}>
+        <div className="flex items-start gap-3">
+          <span className={`mt-1 h-3 w-3 rounded-full ${verdictDot}`} />
+          <div className="flex-1 min-w-0">
+            <p className="text-base font-bold">{verdict.label}</p>
+            <p className="text-xs opacity-80">{verdict.sub}</p>
+          </div>
+          <div className={`text-right shrink-0 px-3 py-1 rounded-lg ${band.bg} ${band.border} border`}>
             <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Risk</p>
-            <div className="mt-1 flex items-baseline gap-1.5">
-              <span className={`text-3xl font-bold tabular-nums ${band.color}`}>{String(fraudScore)}</span>
-              <span className="text-xs text-neutral-500">/ 100</span>
-            </div>
-            <p className={`mt-0.5 text-xs font-semibold ${band.color}`}>{band.label}</p>
+            <p className={`text-lg font-bold tabular-nums leading-tight ${band.color}`}>
+              {String(fraudScore)}<span className="text-[10px] font-normal text-neutral-500">/100</span>
+            </p>
+            <p className={`text-[10px] font-semibold ${band.color}`}>{band.label}</p>
           </div>
-        )}
-
-        {/* Policy compliance — primary decision content */}
-        {policy && (
-          <div className="rounded-xl border border-neutral-200 bg-white px-4 py-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Policy compliance</p>
-              {policy.compliant === true && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-800">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Compliant
-                </span>
-              )}
-              {policy.compliant === false && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800">
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Not compliant
-                </span>
-              )}
-            </div>
-            {policyHeadline ? (
-              <p className="mt-1.5 text-sm font-medium leading-snug text-neutral-900">{policyHeadline}</p>
-            ) : null}
-            {policyRest ? (
-              <p className="mt-1 text-xs leading-relaxed text-neutral-600">{policyRest}</p>
-            ) : null}
-            {Array.isArray(policy.citations) && policy.citations.length > 0 && (
-              <p className="mt-1.5 text-[11px] text-neutral-500">
-                Cited: {(policy.citations as Array<{ id?: string; source?: string }>).map((c) => c.source || c.id).filter(Boolean).join(", ")}
-              </p>
-            )}
-          </div>
-        )}
+        </div>
       </div>
 
-      {/* ICD / CPT compact one-liner */}
-      {codeVal && codeVal.status === "ok" && s4 && (
-        <div className="rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-xs text-neutral-700">
-          <span className="font-semibold text-neutral-900">Codes:</span>{" "}
-          {String(s4.total_diagnosis_codes ?? "—")} diagnosis ({String(s4.invalid_diagnosis_count ?? 0)} invalid)
-          <span className="text-neutral-300 mx-2">·</span>
-          {String(s4.total_procedure_codes ?? "—")} procedure ({String(s4.invalid_procedure_count ?? 0)} invalid)
+      {/* Compliance line */}
+      {policy && (
+        <div className="rounded-xl border border-neutral-200 bg-white px-3 py-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Policy</span>
+            {policy.compliant === true && (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Compliant
+              </span>
+            )}
+            {policy.compliant === false && (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-800">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Not compliant
+              </span>
+            )}
+            {policyHeadline ? (
+              <span className="text-xs text-neutral-700 leading-snug">{policyHeadline}</span>
+            ) : null}
+          </div>
+          {policyRest ? (
+            <details className="mt-1">
+              <summary className="cursor-pointer text-[11px] font-medium text-neutral-500 hover:text-neutral-700">
+                Why this decision
+              </summary>
+              <p className="mt-1 text-xs leading-relaxed text-neutral-600">{policyRest}</p>
+              {Array.isArray(policy.citations) && policy.citations.length > 0 && (
+                <p className="mt-1 text-[11px] text-neutral-500">
+                  Cited: {(policy.citations as Array<{ id?: string; source?: string }>).map((c) => c.source || c.id).filter(Boolean).join(", ")}
+                </p>
+              )}
+            </details>
+          ) : null}
         </div>
       )}
 
-      {/* Issues grouped by severity, human-mapped */}
-      {(critical.length + warnings.length + infos.length) > 0 && (
-        <div className="rounded-xl border border-neutral-200 bg-white p-3">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 mb-2">Issues</p>
-          {critical.length > 0 && (
-            <ul className="space-y-1.5 mb-2">
-              {critical.map((f, i) => (
-                <li key={`c${i}`} className="flex gap-2 rounded-lg border border-red-200 bg-red-50/50 px-2.5 py-1.5">
-                  <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-red-500" />
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-red-900">{f.label}</p>
-                    {f.detail ? <p className="text-xs text-red-800/80 leading-snug">{f.detail}</p> : null}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-          {warnings.length > 0 && (
-            <ul className="space-y-1.5 mb-2">
-              {warnings.map((f, i) => (
-                <li key={`w${i}`} className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50/50 px-2.5 py-1.5">
-                  <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-amber-500" />
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-amber-900">{f.label}</p>
-                    {f.detail ? <p className="text-xs text-amber-800/80 leading-snug">{f.detail}</p> : null}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-          {infos.length > 0 && (
-            <ul className="space-y-1.5">
-              {infos.map((f, i) => (
-                <li key={`i${i}`} className="flex gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 py-1.5">
-                  <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-neutral-400" />
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-neutral-700">{f.label}</p>
-                    {f.detail ? <p className="text-xs text-neutral-600 leading-snug">{f.detail}</p> : null}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-
-      {/* Documents processed: tiny inline list */}
-      {extraction?.documents?.length ? (
-        <details className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs">
-          <summary className="cursor-pointer font-semibold text-neutral-700 select-none">
-            Documents processed ({extraction.documents.length})
-          </summary>
-          <ul className="mt-2 space-y-0.5 text-neutral-600">
-            {extraction.documents.map((d: { document_type?: string; original_filename?: string }, i: number) => (
-              <li key={i} className="truncate">
-                <span className="font-medium text-neutral-900">{d.original_filename || `Document ${i + 1}`}</span>
-                <span className="text-neutral-300 mx-1">·</span>
-                <span>{d.document_type || "—"}</span>
+      {/* Top 2 issues only */}
+      {topIssues.length > 0 && (
+        <div className="rounded-xl border border-neutral-200 bg-white px-3 py-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Issues</span>
+            {remainingIssues > 0 ? (
+              <details className="text-[11px]">
+                <summary className="cursor-pointer text-neutral-500 hover:text-neutral-700">
+                  +{remainingIssues} more
+                </summary>
+                <ul className="mt-2 space-y-1">
+                  {[...critical, ...warnings, ...infos].slice(2).map((f, i) => (
+                    <li key={`m${i}`} className="flex gap-2 text-xs text-neutral-700">
+                      <span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${
+                        f.severity === "critical" ? "bg-red-500" : f.severity === "warning" ? "bg-amber-500" : "bg-neutral-400"
+                      }`} />
+                      <span className="min-w-0"><strong className="font-semibold">{f.label}</strong>{f.detail ? ` — ${f.detail}` : ""}</span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
+          </div>
+          <ul className="mt-1 space-y-1">
+            {topIssues.map((f, i) => (
+              <li key={`t${i}`} className="flex gap-2">
+                <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${f.severity === "critical" ? "bg-red-500" : "bg-amber-500"}`} />
+                <div className="min-w-0">
+                  <p className={`text-xs font-semibold ${f.severity === "critical" ? "text-red-900" : "text-amber-900"}`}>
+                    {f.label}
+                  </p>
+                  {f.detail ? <p className="text-[11px] text-neutral-600 leading-snug">{f.detail}</p> : null}
+                </div>
               </li>
             ))}
           </ul>
-        </details>
-      ) : null}
+        </div>
+      )}
 
-      <button
-        type="button"
-        onClick={() => setShowRaw((v: boolean) => !v)}
-        className="text-[11px] font-medium text-neutral-400 hover:text-neutral-600"
-      >
-        {showRaw ? "Hide raw JSON" : "View raw JSON"}
-      </button>
-      {showRaw && (
-        <pre className="overflow-auto rounded-xl border border-neutral-200 bg-neutral-900 p-3 text-[11px] text-neutral-100">
+      {/* Codes (collapsed by default) */}
+      {codeVal && codeVal.status === "ok" && s4 && (
+        <details className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs">
+          <summary className="cursor-pointer font-medium text-neutral-700">
+            Codes: {String(s4.total_diagnosis_codes ?? "—")} dx · {String(s4.total_procedure_codes ?? "—")} px
+            {(Number(s4.invalid_diagnosis_count ?? 0) + Number(s4.invalid_procedure_count ?? 0)) > 0 ? (
+              <span className="text-amber-700 font-semibold ml-1">
+                ({Number(s4.invalid_diagnosis_count ?? 0) + Number(s4.invalid_procedure_count ?? 0)} invalid)
+              </span>
+            ) : null}
+          </summary>
+          <p className="mt-1 text-neutral-600">
+            Diagnosis codes: {String(s4.total_diagnosis_codes ?? "—")} ({String(s4.invalid_diagnosis_count ?? 0)} invalid)
+            <span className="mx-1.5 text-neutral-300">·</span>
+            Procedure codes: {String(s4.total_procedure_codes ?? "—")} ({String(s4.invalid_procedure_count ?? 0)} invalid)
+          </p>
+        </details>
+      )}
+
+      {/* Debug-only raw JSON */}
+      {showDebug ? (
+        <button
+          type="button"
+          onClick={() => setShowRaw((v: boolean) => !v)}
+          className="text-[10px] font-medium text-neutral-400 hover:text-neutral-600"
+        >
+          {showRaw ? "Hide raw JSON" : "View raw JSON (debug)"}
+        </button>
+      ) : null}
+      {showDebug && showRaw && (
+        <pre className="overflow-auto rounded-xl border border-neutral-200 bg-neutral-900 p-3 text-[11px] text-neutral-100 max-h-48">
           {jsonStr}
         </pre>
       )}
@@ -630,271 +683,216 @@ export default function ClaimDetailPage() {
         <span className="font-mono text-neutral-700">{claim.claim_id}</span>
       </nav>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
-          <Card hover className="!p-4 sm:!p-5">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <h1 className="text-xl font-bold text-neutral-900 truncate">{claim.patient_name}</h1>
-                <p className="mt-0.5 text-xs text-neutral-500 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                  <span className="font-mono text-primary-700">{claim.claim_id}</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (claim.claim_id) {
-                        navigator.clipboard.writeText(claim.claim_id);
-                        setCopied(true);
-                        setTimeout(() => setCopied(false), 2000);
-                      }
-                    }}
-                    className="inline-flex items-center gap-1 rounded px-1 text-xs font-medium text-primary-600 hover:bg-primary-50"
-                    title="Copy claim ID"
-                  >
-                    {copied ? "Copied!" : (
-                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h2a2 2 0 012 2v2m2 4h10a2 2 0 002-2v-2a2 2 0 00-2-2H9.828a2 2 0 00-2 2v2a2 2 0 002 2z" />
-                      </svg>
-                    )}
-                  </button>
-                  <span className="text-neutral-300">·</span>
-                  <span>Policy {claim.policy_number}</span>
-                  {claim.updated_at ? (
-                    <>
-                      <span className="text-neutral-300">·</span>
-                      <span title={new Date(claim.updated_at).toLocaleString()}>{formatRelativeTime(claim.updated_at)}</span>
-                    </>
-                  ) : null}
-                </p>
+      {/* Compact 1-line header strip */}
+      <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-neutral-200 bg-white px-4 py-2.5">
+        <span className="font-mono text-sm font-bold text-neutral-900">{claim.claim_id}</span>
+        <button
+          type="button"
+          onClick={() => {
+            if (claim.claim_id) {
+              navigator.clipboard.writeText(claim.claim_id);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+            }
+          }}
+          className="inline-flex items-center rounded text-[11px] text-neutral-400 hover:text-neutral-700"
+          title="Copy claim ID"
+        >
+          {copied ? "Copied!" : (
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h2a2 2 0 012 2v2m2 4h10a2 2 0 002-2v-2a2 2 0 00-2-2H9.828a2 2 0 00-2 2v2a2 2 0 002 2z" />
+            </svg>
+          )}
+        </button>
+        <span className="text-neutral-200">|</span>
+        <Pill tone={getStatusTone(claim.status)} pulse={isProcessing(claim.status)}>{claim.status}</Pill>
+        <span className="text-neutral-200">|</span>
+        <span className="text-base font-bold text-neutral-900 tabular-nums">
+          ₹{Number(claim.claimed_amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+        </span>
+        <span className="text-neutral-200">|</span>
+        <span className="text-xs text-neutral-600" title={new Date(claim.updated_at ?? Date.now()).toLocaleString()}>
+          {formatRelativeTime(claim.updated_at)}
+        </span>
+        <span className="ml-auto inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium text-neutral-500" title={polling ? "Auto-refresh on" : "Paused"}>
+          <button
+            type="button"
+            onClick={() => setPolling((p: boolean) => !p)}
+            className="inline-flex items-center gap-1.5 hover:text-neutral-700"
+          >
+            {polling ? (
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              </span>
+            ) : (
+              <span className="h-1.5 w-1.5 rounded-full bg-neutral-400" />
+            )}
+            {polling ? "Live" : "Paused"}
+          </button>
+        </span>
+      </div>
+
+      {/* Main 2-col: AI verdict + content (left, 2/3) | Decision sticky (right, 1/3) */}
+      <div className="grid gap-3 lg:grid-cols-3">
+        <div className="space-y-3 lg:col-span-2">
+
+          {/* AI report block — verdict-first */}
+          {(isClaimant || isApprover) ? (
+            aiReportReady ? (
+              <Card hover className="!p-3 sm:!p-4">
+                <AiReportCard
+                  jsonStr={claim.ai_report_json}
+                  claimStatus={claim.status}
+                  history={claim.history}
+                  docCount={(claim.documents ?? []).length}
+                  claimFraud={
+                    {
+                      fraud_probability: claim.fraud_probability,
+                      anomaly_score: claim.anomaly_score,
+                      risk_score: claim.risk_score,
+                      risk_level: claim.risk_level,
+                      fraud_flags: claim.fraud_flags,
+                    } as ClaimFraudFields
+                  }
+                />
+              </Card>
+            ) : (
+              <Card hover className="!p-3 sm:!p-4">
+                <AiReportCard
+                  jsonStr={claim.ai_report_json}
+                  claimStatus={claim.status}
+                  history={claim.history}
+                  docCount={(claim.documents ?? []).length}
+                  claimFraud={
+                    {
+                      fraud_probability: claim.fraud_probability,
+                      anomaly_score: claim.anomaly_score,
+                      risk_score: claim.risk_score,
+                      risk_level: claim.risk_level,
+                      fraud_flags: claim.fraud_flags,
+                    } as ClaimFraudFields
+                  }
+                />
+              </Card>
+            )
+          ) : null}
+
+          {/* Bottom row: Patient/diagnosis | Documents | Activity (3-col on lg, stacked on sm) */}
+          <div className="grid gap-3 md:grid-cols-3">
+            {/* Patient + Diagnosis */}
+            <Card hover className="!p-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-500">Patient</h3>
               </div>
-              <div className="flex items-center gap-3">
-                {/* Subtle live indicator: dot only, click to pause/resume */}
+              <p className="mt-1 truncate text-sm font-semibold text-neutral-900">{claim.patient_name}</p>
+              <dl className="mt-2 space-y-1 text-xs">
+                <div className="flex justify-between gap-2">
+                  <dt className="text-neutral-500">Hospital</dt>
+                  <dd className="truncate font-medium text-neutral-800 text-right">{claim.hospital}</dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-neutral-500">Doctor</dt>
+                  <dd className="truncate font-medium text-neutral-800 text-right">{claim.doctor || "—"}</dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-neutral-500">Treatment</dt>
+                  <dd className="font-medium text-neutral-800 text-right">{claim.treatment_date}</dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-neutral-500">Policy</dt>
+                  <dd className="truncate font-mono text-neutral-800 text-right">{claim.policy_number}</dd>
+                </div>
+              </dl>
+              <details className="mt-2">
+                <summary className="cursor-pointer text-[11px] font-medium text-neutral-500 hover:text-neutral-700">Diagnosis</summary>
+                <p className="mt-1 text-xs leading-snug text-neutral-700 whitespace-pre-wrap">{claim.diagnosis}</p>
+              </details>
+            </Card>
+
+            {/* Documents */}
+            <Card hover className="!p-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-500">Documents</h3>
+                <span className="text-[11px] text-neutral-500">{(claim.documents ?? []).length}</span>
+              </div>
+              <div className="mt-2">
+                {(claim.documents ?? []).length === 0 ? (
+                  <p className="text-xs text-neutral-500 italic">None uploaded</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {[...(claim.documents ?? [])]
+                      .sort((a: any, b: any) => (DOC_TYPE_RANK[a.document_type] ?? 99) - (DOC_TYPE_RANK[b.document_type] ?? 99))
+                      .slice(0, 5)
+                      .map((doc: any) => {
+                        const tagColor =
+                          doc.document_type === "Hospital Bill" ? "bg-primary-50 text-primary-700" :
+                          doc.document_type === "Discharge Summary" ? "bg-violet-50 text-violet-700" :
+                          doc.document_type === "Lab Report" ? "bg-amber-50 text-amber-700" :
+                          doc.document_type === "Prescription" ? "bg-emerald-50 text-emerald-700" :
+                          "bg-neutral-100 text-neutral-700";
+                        return (
+                          <li key={doc.id}>
+                            <a
+                              href={doc.download_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center gap-1.5 group"
+                              title={doc.original_filename}
+                            >
+                              <span className={`inline-flex shrink-0 rounded px-1 text-[9px] font-semibold uppercase ${tagColor}`}>
+                                {(doc.document_type || "Other").replace(/Hospital Bill/, "Bill").replace(/Discharge Summary/, "Discharge").replace(/Prescription/, "Rx").replace(/Lab Report/, "Lab")}
+                              </span>
+                              <span className="truncate text-xs text-neutral-700 group-hover:text-primary-700">{doc.original_filename}</span>
+                            </a>
+                          </li>
+                        );
+                      })}
+                  </ul>
+                )}
+              </div>
+              {isClaimant ? (
                 <button
                   type="button"
-                  onClick={() => setPolling((p: boolean) => !p)}
-                  className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[11px] font-medium text-neutral-600 hover:bg-neutral-100"
-                  title={polling ? "Auto-refresh on. Click to pause." : "Auto-refresh paused. Click to resume."}
-                >
-                  {polling ? (
-                    <span className="relative flex h-1.5 w-1.5">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                    </span>
-                  ) : (
-                    <span className="h-1.5 w-1.5 rounded-full bg-neutral-400" />
-                  )}
-                  {polling ? "Live" : "Paused"}
-                </button>
-
-                {/* Role-based primary CTA */}
-                {isApprover && claim.status !== "Decision" ? (
-                  <div className="flex gap-1.5">
-                    <Button size="sm" disabled={decisionBusy} onClick={() => setPendingDecision("approve")}>Approve</Button>
-                    <Button size="sm" variant="danger" disabled={decisionBusy} onClick={() => setPendingDecision("reject")}>Reject</Button>
-                  </div>
-                ) : null}
-                {isClaimant && claim.status === "More Info Requested" ? (
-                  <Button size="sm" onClick={() => document.getElementById("more-info-section")?.scrollIntoView({ behavior: "smooth" })}>
-                    Submit info
-                  </Button>
-                ) : null}
-              </div>
-            </div>
-            <div className="mt-3 flex flex-wrap items-center gap-1.5">
-              <Pill tone={getStatusTone(claim.status)} pulse={isProcessing(claim.status)}>{claim.status}</Pill>
-              {claim.decision && String(claim.decision).toLowerCase() !== "pending" ? (
-                <Pill tone={String(claim.decision).toLowerCase() === "approved" ? "success" : String(claim.decision).toLowerCase() === "rejected" ? "danger" : "warning"}>
-                  {claim.decision}
-                </Pill>
-              ) : null}
-              <span className="ml-1 text-base font-semibold text-neutral-900">
-                ₹{Number(claim.claimed_amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-              </span>
-            </div>
-            <dl className="mt-4 grid gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
-              <div>
-                <dt className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Hospital</dt>
-                <dd className="font-medium text-neutral-900 truncate">{claim.hospital}</dd>
-              </div>
-              <div>
-                <dt className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Doctor</dt>
-                <dd className="font-medium text-neutral-900 truncate">{claim.doctor}</dd>
-              </div>
-              <div>
-                <dt className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Treatment date</dt>
-                <dd className="font-medium text-neutral-900 truncate">{claim.treatment_date}</dd>
-              </div>
-              <div className="sm:col-span-3">
-                <dt className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Diagnosis</dt>
-                <dd className="text-neutral-800 whitespace-pre-wrap">{claim.diagnosis}</dd>
-              </div>
-            </dl>
-          </Card>
-
-          {isClaimant ? (
-            <Card hover className="!p-3 sm:!p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500 mr-1">Upload</span>
-                <Select
-                  value={uploadType}
-                  onChange={(e) => setUploadType(e.target.value)}
-                  className="!h-9 !w-auto !text-sm"
-                  disabled={uploadBusy}
-                >
-                  {DOC_TYPES.map((t) => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </Select>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  accept=".pdf,image/*"
-                  className="hidden"
-                  disabled={uploadBusy}
-                  onChange={(e) => {
-                    const picked = Array.from(e.target.files ?? []);
-                    if (picked.length > 0) {
-                      autoUpload(picked, uploadType);
-                    }
-                    if (fileInputRef.current) fileInputRef.current.value = "";
-                  }}
-                />
-                <Button
-                  size="sm"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploadBusy}
+                  className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-primary-700 hover:text-primary-900"
                 >
-                  {uploadBusy ? (
-                    <>
-                      <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                      Uploading {files.length} file{files.length === 1 ? "" : "s"}…
-                    </>
-                  ) : (
-                    "Choose files"
-                  )}
-                </Button>
-                <span className="text-[11px] text-neutral-400 ml-auto">PDF, JPG, PNG · auto-upload as {uploadType}</span>
-              </div>
+                  {uploadBusy ? "Uploading…" : "+ Add file"}
+                </button>
+              ) : null}
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept=".pdf,image/*"
+                className="hidden"
+                disabled={uploadBusy}
+                onChange={(e) => {
+                  const picked = Array.from(e.target.files ?? []);
+                  if (picked.length > 0) autoUpload(picked, uploadType);
+                  if (fileInputRef.current) fileInputRef.current.value = "";
+                }}
+              />
             </Card>
-          ) : null}
 
-          <Card hover className="!p-4 sm:!p-5">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-bold text-neutral-900">Documents ({(claim.documents ?? []).length})</h2>
-            </div>
-            <div className="mt-3">
-              {(claim.documents ?? []).length === 0 ? (
-                <div className="rounded-xl border-2 border-dashed border-neutral-200 bg-neutral-50/50 px-4 py-6 text-center">
-                  <p className="text-sm font-medium text-neutral-700">No documents yet</p>
-                  <p className="mt-1 text-xs text-neutral-500">Use the upload bar above to add hospital bills, prescriptions, or lab reports.</p>
-                </div>
-              ) : (
-                <ul className="grid gap-1.5 sm:grid-cols-2">
-                  {[...(claim.documents ?? [])]
-                    .sort((a: any, b: any) => (DOC_TYPE_RANK[a.document_type] ?? 99) - (DOC_TYPE_RANK[b.document_type] ?? 99))
-                    .map((doc: any) => {
-                      const tagColor =
-                        doc.document_type === "Hospital Bill" ? "bg-primary-50 text-primary-700 border-primary-200" :
-                        doc.document_type === "Discharge Summary" ? "bg-violet-50 text-violet-700 border-violet-200" :
-                        doc.document_type === "Lab Report" ? "bg-amber-50 text-amber-700 border-amber-200" :
-                        doc.document_type === "Prescription" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                        "bg-neutral-100 text-neutral-700 border-neutral-200";
-                      return (
-                        <li key={doc.id} className="flex items-center gap-2 rounded-lg border border-neutral-200 bg-white px-2.5 py-2">
-                          <a
-                            href={doc.download_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="min-w-0 flex-1 group"
-                            title="Open in new tab"
-                          >
-                            <p className="truncate text-xs font-medium text-neutral-900 group-hover:text-primary-700">{doc.original_filename}</p>
-                            <span className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wider mt-0.5 ${tagColor}`}>
-                              {doc.document_type || "Other"}
-                            </span>
-                          </a>
-                        </li>
-                      );
-                    })}
-                </ul>
-              )}
-            </div>
-          </Card>
-
-          {/* AI report renders here (full left-col width = ~2/3 of page) when data is ready */}
-          {aiReportReady && (isClaimant || isApprover) ? (
-            <Card hover className="border-l-4 border-l-primary-500 !p-4 sm:!p-5">
+            {/* Activity (latest only + expand) */}
+            <Card hover className="!p-3">
               <div className="flex items-center justify-between">
-                <h2 className="text-base font-bold text-neutral-900">AI report</h2>
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-primary-600">Insights</span>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-500">Activity</h3>
               </div>
-              <div className="mt-3">
-                <AiReportCard
-                  jsonStr={claim.ai_report_json}
-                  claimStatus={claim.status}
-                  history={claim.history}
-                  docCount={(claim.documents ?? []).length}
-                  claimFraud={
-                    {
-                      fraud_probability: claim.fraud_probability,
-                      anomaly_score: claim.anomaly_score,
-                      risk_score: claim.risk_score,
-                      risk_level: claim.risk_level,
-                      fraud_flags: claim.fraud_flags,
-                    } as ClaimFraudFields
-                  }
-                />
+              <div className="mt-2">
+                <StatusTimeline history={claim.history ?? []} previewCount={1} />
               </div>
             </Card>
-          ) : null}
-
-          <Card hover className="!p-4 sm:!p-5">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-bold text-neutral-900">Activity</h2>
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-primary-600">Status</span>
-            </div>
-            <div className="mt-3">
-              <StatusTimeline history={claim.history ?? []} />
-            </div>
-          </Card>
+          </div>
         </div>
 
-        <div className="space-y-4 lg:sticky lg:top-20 lg:self-start">
-          {/* Narrow AI processing/ETA card stays in right col while pipeline runs */}
-          {!aiReportReady && (isClaimant || isApprover) ? (
-            <Card hover className="border-l-4 border-l-primary-500 !p-4 sm:!p-5">
-              <div className="flex items-center justify-between">
-                <h2 className="text-base font-bold text-neutral-900">AI report</h2>
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-primary-600">Insights</span>
-              </div>
-              <div className="mt-3">
-                <AiReportCard
-                  jsonStr={claim.ai_report_json}
-                  claimStatus={claim.status}
-                  history={claim.history}
-                  docCount={(claim.documents ?? []).length}
-                  claimFraud={
-                    {
-                      fraud_probability: claim.fraud_probability,
-                      anomaly_score: claim.anomaly_score,
-                      risk_score: claim.risk_score,
-                      risk_level: claim.risk_level,
-                      fraud_flags: claim.fraud_flags,
-                    } as ClaimFraudFields
-                  }
-                />
-              </div>
-            </Card>
-          ) : null}
-
+        <div className="space-y-3 lg:sticky lg:top-20 lg:self-start">
           {isApprover ? (
-            <Card hover className="border-l-4 border-l-primary-500 !p-4 sm:!p-5">
+            <Card hover className="!p-4 sm:!p-5">
               <div className="flex items-center justify-between">
-                <h2 className="text-base font-bold text-neutral-900">Approve or reject</h2>
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-primary-600">Decision</span>
+                <h2 className="text-base font-bold text-neutral-900">Decision</h2>
               </div>
               <div className="mt-3 space-y-3">
                 <div>
