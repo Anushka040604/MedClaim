@@ -20,7 +20,7 @@ export function Card({
   return (
     <div
       className={cx(
-        "rounded-3xl border border-neutral-200/70 bg-gradient-card p-5 shadow-card sm:p-6 transition-all duration-200",
+        "rounded-2xl border border-neutral-200/70 bg-gradient-card p-4 shadow-card sm:p-5 transition-all duration-200",
         hover &&
           "hover:-translate-y-0.5 hover:shadow-card-hover hover:border-primary-200/60 active:translate-y-0",
         className

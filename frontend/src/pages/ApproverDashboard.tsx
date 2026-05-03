@@ -42,12 +42,12 @@ export default function ApproverDashboard() {
 
   return (
     <>
-      <div className="mb-6">
-        <h1 className="page-title">Review queue</h1>
-        <p className="page-subtitle text-neutral-600">Review claims, AI reports, and take approve / reject / request-info decisions.</p>
+      <div className="mb-4">
+        <h1 className="text-2xl font-bold tracking-tight text-neutral-900">Review queue</h1>
+        <p className="mt-0.5 text-sm text-neutral-600">Review claims, AI reports, and take approve / reject / request-info decisions.</p>
       </div>
 
-      <div className="mb-6">
+      <div className="mb-4">
         {loading ? (
           <SkeletonStatRow count={2} />
         ) : (

@@ -163,12 +163,14 @@ export default function ClaimantDashboard() {
 
   return (
     <>
-      <div className="mb-6">
-        <h1 className="page-title">Claims</h1>
-        <p className="page-subtitle text-neutral-600">Submit a new claim or open an existing one to upload documents and track status.</p>
+      <div className="mb-4 flex items-end justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-neutral-900">Claims</h1>
+          <p className="mt-0.5 text-sm text-neutral-600">Submit a new claim or open an existing one to upload documents and track status.</p>
+        </div>
       </div>
 
-      <div className="mb-6">
+      <div className="mb-4">
         {loading ? (
           <SkeletonStatRow count={3} />
         ) : (
@@ -195,7 +197,7 @@ export default function ClaimantDashboard() {
         )}
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-5">
+      <div className="grid gap-4 lg:grid-cols-5">
         <div className="lg:col-span-2">
           <Card hover className="border-l-4 border-l-primary-500">
             <p className="section-heading">New claim</p>
