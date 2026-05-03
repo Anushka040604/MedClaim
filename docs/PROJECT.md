@@ -237,9 +237,17 @@ List-primary. "+ New claim" opens a modal form. Status filter, auto-refresh ever
 
 ![Claimant dashboard](./qa-screenshots/07-claimant-dashboard.png)
 
-### Fraud journey — low risk approval candidate
-Compliant policy + low risk score + no warnings → "Likely approve" verdict. Approve button enabled.
+### Fraud journey — low risk (likely approve)
+Compliant policy + risk score 28 + no warnings → "Likely approve" verdict in green. Approve button enabled.
 
 ![Green journey](./fraud-journeys/02-journey-green-detail.png)
 
-> Higher-risk amber/red journey screenshots not included — current test data only contains low-risk claims. To regenerate with realistic risk distribution, run the synthetic data generator and the fraud-detection pipeline against varied inputs.
+### Fraud journey — medium risk (needs review)
+Risk score 52 in amber band + 2 warnings (amount mismatch + invalid codes) → "2 warnings" verdict in amber. Approve disabled until override.
+
+![Amber journey](./fraud-journeys/04-journey-amber-detail.png)
+
+### Fraud journey — high risk (likely reject)
+Risk score 78 in red band + non-compliant policy + 2 warnings → "Likely reject" verdict in red. Top issues show actual ₹ mismatch and invalid code count. Override toggle required to approve.
+
+![Red journey](./fraud-journeys/05-journey-red-detail.png)

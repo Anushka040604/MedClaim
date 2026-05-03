@@ -36,17 +36,19 @@ Full end-to-end testing completed on Medical Claim Verification app. All major w
 
 ## Screenshots
 
+Refreshed against the redesigned UI on branch `design/mvp-ui-polish` (1440×900 viewport).
+
 | Name | Description |
 |------|-------------|
-| [01-landing.png](qa-screenshots/01-landing.png) | Login page |
-| [02-dashboard.png](qa-screenshots/02-dashboard.png) | Claimant dashboard with claims list |
-| [04-claim-detail.png](qa-screenshots/04-claim-detail.png) | Claim detail view (claimant) |
-| [05-claim-json.png](qa-screenshots/05-claim-json.png) | Raw claim JSON toggle |
-| [07-login-again.png](qa-screenshots/07-login-again.png) | Second login (approver) |
-| [08-approver-dashboard.png](qa-screenshots/08-approver-dashboard.png) | Approver queue |
-| [09-approver-review.png](qa-screenshots/09-approver-review.png) | Claim review interface |
-| [10-approval-result.png](qa-screenshots/10-approval-result.png) | Approval form with decision buttons |
-| [11-approver-queue-after.png](qa-screenshots/11-approver-queue-after.png) | Queue after review |
+| [01-landing.png](qa-screenshots/01-landing.png) | Login page (split-pane brand + sign-in card) |
+| [04-claim-detail.png](qa-screenshots/04-claim-detail.png) | Full-page claim detail (verdict + decision + docs + activity) |
+| [07-claimant-dashboard.png](qa-screenshots/07-claimant-dashboard.png) | Claimant dashboard — list-primary, "+ New claim" opens modal |
+| [08-approver-dashboard.png](qa-screenshots/08-approver-dashboard.png) | Approver queue — alert stats + filters + table-like rows |
+| [09-approver-review.png](qa-screenshots/09-approver-review.png) | Approver claim review — verdict tile + sticky decision panel |
+| [10-approver-queue.png](qa-screenshots/10-approver-queue.png) | Admin viewing approver queue |
+| [11-admin-dashboard.png](qa-screenshots/11-admin-dashboard.png) | Admin dashboard variant — SLA-driven stats |
+| [fraud-journeys/01-dashboard-all-claims.png](fraud-journeys/01-dashboard-all-claims.png) | Admin "all claims" dashboard |
+| [fraud-journeys/02-journey-green-detail.png](fraud-journeys/02-journey-green-detail.png) | Low-risk green journey — likely-approve verdict |
 
 ## Full Report
 
