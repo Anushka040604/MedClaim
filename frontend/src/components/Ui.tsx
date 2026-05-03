@@ -492,6 +492,82 @@ export class ErrorBoundary extends React.Component<EBProps, EBState> {
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
+   Generic content modal. ESC to close, click backdrop, focus trap.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+export function Modal({
+  open,
+  onClose,
+  title,
+  children,
+  footer,
+  size = "md",
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+  size?: "sm" | "md" | "lg" | "xl";
+}) {
+  React.useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  const widthClass =
+    size === "sm" ? "max-w-md" :
+    size === "lg" ? "max-w-2xl" :
+    size === "xl" ? "max-w-4xl" :
+    "max-w-lg";
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-start justify-center p-4 sm:p-6 overflow-y-auto"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+    >
+      <div
+        className="absolute inset-0 bg-neutral-900/50 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <div className={cx("relative my-8 w-full rounded-2xl border border-neutral-200 bg-white shadow-card-hover", widthClass)}>
+        <div className="flex items-center justify-between border-b border-neutral-100 px-5 py-3">
+          <h3 id="modal-title" className="text-base font-bold text-neutral-900">{title}</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-neutral-500 hover:bg-neutral-100"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="px-5 py-4">{children}</div>
+        {footer ? (
+          <div className="sticky bottom-0 z-10 border-t border-neutral-100 bg-white/95 backdrop-blur px-5 py-3 rounded-b-2xl">
+            {footer}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
    Confirm dialog (modal). ESC to close, click backdrop to close, focus trap.
    ──────────────────────────────────────────────────────────────────────────── */
 
